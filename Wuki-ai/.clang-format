@@ -1,0 +1,27 @@
+# Xcode（⌃I / Editor ▸ Structure ▸ Re-Indent）与 `xcrun clang-format` 共用此配置。
+# 目标：只统一缩进与空白，尽量不改变代码本身的排版习惯。
+# 与仓库根目录 .editorconfig 保持一致：UTF-8、LF、4 空格缩进、不用制表符。
+
+BasedOnStyle: LLVM
+Language: Cpp
+
+# ---- 缩进：本次要解决的核心问题 ----
+IndentWidth: 4          # .editorconfig: indent_size = 4
+TabWidth: 4             # 一个制表符按 4 列显示
+UseTab: Never           # .editorconfig: indent_style = space（禁止 Tab 缩进）
+ContinuationIndentWidth: 4
+NamespaceIndentation: All   # 保持 namespace 内代码原有的缩进层级
+IndentPPDirectives: None
+
+# ---- 尽量保持原有排版，避免产生无关改动 ----
+ColumnLimit: 0                  # 不重新折行
+SortIncludes: false             # 不重排 #include
+ReflowComments: false           # 不重排注释
+SpacesBeforeTrailingComments: 2 # 保留 `代码  // 注释` 的双空格
+PointerAlignment: Left          # 保留 `std::vector<float>& v` 写法
+ReferenceAlignment: Pointer
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: None  # 不把短函数压成一行，保持原有结构
+BreakBeforeBraces: Attach
+SpaceBeforeParens: ControlStatements

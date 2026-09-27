@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# CMake / build
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.o
+*.a
+*.so
+*.dylib
+
+# exe / exec
+src/lanza-ai.exec
+src/lanza-ai.exe
+lanZa-AI.exec
+lanZa-AI.exe
+
+# Compilation output
+DerivedData/
+lanZa-AI

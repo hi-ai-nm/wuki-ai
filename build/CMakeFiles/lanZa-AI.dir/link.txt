@@ -1,0 +1,1 @@
+/usr/bin/clang++ -g -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/lanZa-AI.dir/src/main/main.cpp.o" -o /Users/max/Project/Wuki/Wuki-ai/Bin/lanZa-AI  -Wl,-rpath,@loader_path /Users/max/Project/Wuki/Wuki-ai/Bin/libWukiInclude.dylib /Users/max/Project/Wuki/Wuki-ai/Bin/libWukiLib.dylib
