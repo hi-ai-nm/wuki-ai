@@ -1,5 +1,4 @@
-# Xcode（⌃I / Editor ▸ Structure ▸ Re-Indent）与 `xcrun clang-format` 共用此配置。
-# 目标：只统一缩进与空白，尽量不改变代码本身的排版习惯。
+# 目标：统一缩进与空白
 # 与仓库根目录 .editorconfig 保持一致：UTF-8、LF、4 空格缩进、不用制表符。
 
 BasedOnStyle: LLVM

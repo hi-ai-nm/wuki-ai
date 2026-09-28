@@ -65,7 +65,7 @@ namespace rnn {
         std::vector<float> db;  // 偏置梯度累加器，和 par.b 同尺寸
 
         // CleanContext 函数
-        void CleanContext() {
+        inline void CleanContext() {
             insPar.a.clear();
             insPar.z.clear();
             insPar.x.clear();
@@ -205,7 +205,7 @@ namespace rnn {
         }
 
         // 设置层数
-        void set_neur(const std::vector<size_t>& neur, bool autoInit = true, size_t hSize = 16) {
+        inline void set_neur(const std::vector<size_t>& neur, bool autoInit = true, size_t hSize = 16) {
             par.neur = neur;  // 必须先赋值：Init 是按 par.neur 来分配 w / b 的
             if (autoInit) {
                 Init(par.neur, hSize);
@@ -213,7 +213,7 @@ namespace rnn {
             par.notNeurUnde = true;
         }
 
-        void set_neur(std::initializer_list<size_t> neur, bool autoInit = true, size_t hSize = 16) {
+        inline void set_neur(std::initializer_list<size_t> neur, bool autoInit = true, size_t hSize = 16) {
             par.neur = neur;  // 同上：先赋值再 Init
             if (autoInit) {
                 Init(par.neur, hSize);
@@ -222,7 +222,7 @@ namespace rnn {
         }
 
         // 设置激活函数
-        void set_ActFun(std::string content) {
+        inline void set_ActFun(std::string content) {
             if (content != ActFun_ReLU && content != ActFun_SiLU && content != Alternative_ActFun_Sigmoid) {
                 par.errorCode = 0x01;
                 par.errorBlgig = "SetActFun";
@@ -303,84 +303,82 @@ namespace rnn {
 
             // StudyOneStep
             auto StudyOneStep = [&wStart, &bStart, &dW, &dB, wlr, blr, &loss, &hGoalNext, this](const std::vector<float>& goal, size_t t) {
-                // 计算 loss 和 error
-                // error[] 先装「目标的激活值」，最后统一 -= a 才是真·误差（见下面）
-                std::vector<float> error(bStart.back(), 0.0f);
-                const size_t outStart = bStart[par.neur.size() - 2];  // 输出层在 a[t] / error 里的起点
-                const size_t hStart = outStart + goal.size();         // 输出层里 h 那一段的起点
-                for (size_t lossIndex = 0; lossIndex < goal.size(); lossIndex++) {
-                    loss +=
-                        (goal[lossIndex] - this->insPar.a[t][outStart + lossIndex]) *
-                        (goal[lossIndex] - this->insPar.a[t][outStart + lossIndex]);
-                    // 这里存「目标」（不是 goal - a）：下面统一减 a 之后才是 goal - a
-                    error[outStart + lossIndex] = goal[lossIndex];
-                }
+                // 初始化
+                std::vector<float> allTarget(InteUtiFun::SumUp(par.neur), 0.0f);
 
-                // 把 hGoalNext 用上：本步 h 那一段的目标 = 下一步推回来的 hGoalNext
-                for (size_t i = 0; i < hGoalNext.size(); i++) { error[hStart + i] = hGoalNext[i]; }
+                std::vector<float> wStart(InteUtiFun::SumOfProducts(par.neur), 0.0f), bStart(InteUtiFun::SumUp(par.neur), 0.0f);
 
-                // 逐层往回推「目标的激活值」：
-                // 目标_{第 l 层, i} = Σ_j  N × w_ij / Σ_j|w_ij| × 目标_{第 l+1 层, j}
-                // （N = 第 l 层的神经元数；w_ij 是 第 l 层神经元 i → 第 l+1 层神经元 j 的权重）
-                for (size_t l = par.neur.size() - 2; l > 0; l--) {
-                    for (size_t i = 0; i < par.neur[l]; i++) {     // 遍历神经元
-                        // 计算自己连着的 w 的绝对值和
-                        float wSum = 0.0f;
-                        for (size_t j = 0; j < par.neur[l + 1]; j++) {
-                            wSum += std::abs(this->par.w[wStart[l] + j * par.neur[l] + i]);
-                        }
-                        if (wSum == 0.0f) continue;  // 全 0 就分配不了（会除出 inf / nan）
-
-                        // 按公式把 j 累加起来
-                        float target = 0.0f;
-                        for (size_t j = 0; j < par.neur[l + 1]; j++) {
-                            target += par.neur[l] * this->par.w[wStart[l] + j * par.neur[l] + i] / wSum *
-                                      error[bStart[l] + j];
-                        }
-                        error[bStart[l - 1] + i] = target;
-                    }
-                }
-
-                // 更新 hGoalNext（放在 -= a 之前：这里要的是目标而不是误差）
-                //
-                // 多计算一次输入层，但不用完整计算
-                for (size_t i = 0; i < par.hSize; i++) {     // 遍历神经元
-                    // 计算自己连着的 w 的绝对值和
-                    float wSum = 0.0f;
-                    for (size_t j = 0; j < par.neur[l + 1]; j++) {
-                        wSum += std::abs(this->par.w[wStart[l] + j * par.neur[l] + i]);
-                    }
-                    if (wSum == 0.0f) continue;  // 全 0 就分配不了（会除出 inf / nan）
-
-                    // 按公式把 j 累加起来（原来写在 j 循环里 = 每次覆盖，只剩最后一个 j）
-                    float target = 0.0f;
-                    for (size_t j = 0; j < par.neur[l + 1]; j++) {
-                        target += par.neur[l] * this->par.w[wStart[l] + j * par.neur[l] + i] / wSum *
-                                  error[bStart[l] + j];
-                    }
-                    error[bStart[l - 1] + i] = target;
-                }
-                for (size_t i = 0; i < hGoalNext.size(); i++) { hGoalNext[i] = error[hStart + i]; }
-
-                // 把 error 变成 真·error
-                for (size_t i = 0; i < error.size(); i++) {     // 遍历 error
-                    error[i] -= insPar.a[t][i];   // 把目标变 error
-                }
-
-                // 计算 dW 和 dB
                 {
-                    for (size_t dbi = 0; dbi < error.size(); dbi++) { dB[dbi] += error[dbi] * blr; }
-                    for (size_t l = 0; l < par.neur.size() - 1; l++) {
-                        const size_t nIn = par.neur[l], nOut = par.neur[l + 1];
-                        const auto& xIn = insPar.x[t * (par.neur.size() - 1) + l];
-                        for (size_t out = 0; out < nOut; out++) {
-                            for (size_t in = 0; in < nIn; in++) {
-                                dW[wStart[l] + out * nIn + in] +=
-                                    error[bStart[l] + out] * xIn[in] * wlr;
+                    // 计算 wStart 和 bStart
+                    size_t wIndex = 0, bIndex = 0;
+
+                    for (size_t idx = 0; idx < par.neur.size(); idx++) {
+                        // 记录 bStart
+                        bStart[idx] = bIndex;
+                        bIndex += par.neur[idx];
+
+                        // 除最后一层外，每层都记录到下一层的权重起始位置
+                        if (idx < par.neur.size() - 1) {
+                            wStart[idx] = wIndex;
+                            wIndex += par.neur[idx + 1] * par.neur[idx];
+                        }
+                    }
+                }
+
+                // 计算 allTarget
+                {
+                    {
+                        // 计算输出层的误差
+                        for (size_t idx = 0; idx < (par.neur.back() - par.hSize); idx++) {
+                            allTarget[bStart.back() + idx] = goal[idx] - insPar.a[t][bStart.back() + idx];    // 计算误差
+                            loss += allTarget[bStart.back() + idx] * allTarget[bStart.back() + idx];          // 计算总 loss
+                        }
+
+                        // 把 hGoalNext 用上
+                        for (size_t idx = (par.neur.back() - par.hSize); idx < par.neur.back(); idx++) {
+                            allTarget[bStart.back() + idx] = hGoalNext[idx] - insPar.a[t][bStart.back() + idx];    // 计算误差
+                            loss += allTarget[bStart.back() + idx] * allTarget[bStart.back() + idx];               // 计算总 loss
+                        }
+                    }
+
+                    {
+                        // 计算隐藏层和输入层的误差
+                        for (size_t l = par.neur.size() - 1; l > 0; l--) {
+                            for (size_t neu = 0; neu < par.neur[l]; neu++) {
+                                // 计算链接的 w 的和
+                                float sum = 0.0f;
+                                for (size_t n = 0; n < par.neur[l - 1]; n++) {
+                                    sum += par.w[wStart[l - 1] + neu * par.neur[l - 1] + n];
+                                }
+
+                                for (size_t n = 0; n < par.neur[l - 1]; n++) {
+                                    float wij = par.w[wStart[l - 1] + neu * par.neur[l - 1] + n];
+                                    float intenScore = wij / sum;
+
+                                    float err = 
+                                        intenScore * allTarget[bStart[l] + neu];  // 计算误差
+                                    
+                                    allTarget[bStart[l - 1] + n] += err;          // 更新误差
+                                }
+                            }
+                        }
+                    }
+
+                    {
+                        // 计算 w 和 b 的修改值
+                        for (size_t l = 1; l < par.neur.size(); l++) {
+                            for (size_t neu = 0; neu < par.neur[l]; neu++) {
+                                dB[bStart[l] + neu] += blr * allTarget[bStart[l] + neu];
+
+                                for (size_t n = 0; n < par.neur[l - 1]; n++) {
+                                    dW[wStart[l - 1] + neu * par.neur[l - 1] + n] +=
+                                        wlr * allTarget[bStart[l] + neu] * insPar.a[t][bStart[l - 1] + n];
+                                }
                             }
                         }
                     }
                 }
+                
             };
 
             // =============== 开始训练 ===============
@@ -410,7 +408,7 @@ namespace rnn {
          * @param fileName 目标文件，已存在会被覆盖
          * @return 成功 true；失败 false，并写入 par.errorCode / par.errorBlgig
          */
-        bool SaveModel(const std::string& fileName) {
+        inline bool SaveModel(const std::string& fileName) {
             par.errorCode = 0x00;  // 每次调用重算「最近一次的错误」
             par.errorBlgig = "not error";
 
@@ -463,7 +461,7 @@ namespace rnn {
          *
          * @return 成功 true；失败 false，并写入 par.errorCode / par.errorBlgig
          */
-        bool LoadModel(const std::string& fileName) {
+        inline bool LoadModel(const std::string& fileName) {
             par.errorCode = 0x00;
             par.errorBlgig = "not error";
 
@@ -484,9 +482,9 @@ namespace rnn {
             }
 
             // 这是本程序存的 rnn 模型（nn 的模型、其它 json 都会在这里被挡住）
-            const json expectKeys = {"wuki", "model", "rnn", "file", "wmrn"};
+            const json targetKeys = {"wuki", "model", "rnn", "file", "wmrn"};
             if (!inJson.is_object() || !inJson.contains("keys") || !inJson.contains("rulesVersion") ||
-                !inJson.contains("content") || inJson["keys"] != expectKeys || inJson["rulesVersion"] != 1) {
+                !inJson.contains("content") || inJson["keys"] != targetKeys || inJson["rulesVersion"] != 1) {
                 par.errorCode = 0x02;
                 par.errorBlgig = "load";
                 return false;

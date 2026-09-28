@@ -19,10 +19,10 @@ namespace rnn {
         }
 
         /**
- * 计算输入向量中所有元素的和
- * @param input 包含size_t类型元素的向量
- * @return 返回向量中所有元素的总和
- */
+        * 计算输入向量中所有元素的和
+        * @param input 包含size_t类型元素的向量
+        * @return 返回向量中所有元素的总和
+        */
         inline size_t SumUp(std::vector<size_t>& input) {
             size_t output = 0;  // 用于存储总和的变量，初始化为0
                                 // 使用范围for循环遍历输入向量中的每个元素

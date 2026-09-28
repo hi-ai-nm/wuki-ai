@@ -181,7 +181,7 @@ namespace nn {
         }
 
         // 设置层数
-        void set_neur(const std::vector<size_t>& neur, bool autoInit = true) {
+        inline void set_neur(const std::vector<size_t>& neur, bool autoInit = true) {
             par.neur = neur;
             if (autoInit) {
                 Init(par.neur);
@@ -189,7 +189,7 @@ namespace nn {
             par.notNeurUnde = true;
         }
 
-        void set_neur(std::initializer_list<size_t> neur, bool autoInit = true) {
+        inline void set_neur(std::initializer_list<size_t> neur, bool autoInit = true) {
             par.neur = neur;
             if (autoInit) {
                 Init(par.neur);
@@ -198,7 +198,7 @@ namespace nn {
         }
 
         // 设置激活函数
-        void set_ActFun(std::string content) {
+        inline void set_ActFun(std::string content) {
             if (content != ActFun_ReLU && content != ActFun_SiLU && content != Alternative_ActFun_Sigmoid) {
                 par.errorCode = 0x01;
                 par.errorBlgig = "SetActFun";
@@ -365,7 +365,7 @@ namespace nn {
          * @param fileName 目标文件，已存在会被覆盖
          * @return 成功 true；失败 false，并写入 par.errorCode / par.errorBlgig
          */
-        bool SaveModel(const std::string& fileName) {
+        inline bool SaveModel(const std::string& fileName) {
             par.errorCode = 0x00;  // 每次调用重算「最近一次的错误」
             par.errorBlgig = "not error";
 
@@ -416,7 +416,7 @@ namespace nn {
          *
          * @return 成功 true；失败 false，并写入 par.errorCode / par.errorBlgig
          */
-        bool LoadModel(const std::string& fileName) {
+        inline bool LoadModel(const std::string& fileName) {
             par.errorCode = 0x00;
             par.errorBlgig = "not error";
 
