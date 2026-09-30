@@ -284,85 +284,69 @@ namespace rnn {
             }
 
             // =============== 准备展开 ===============
-            std::vector<float> loss;                              // 损失
-            std::vector<float> hGoalNext(par.hSize, 0.0f);  // 下一层目标值
-            std::vector<float> dW(par.w.size(), 0.0f), dB(par.b.size(), 0.0f);                      // 修改值
-            // 计算每层开始索引
-            std::vector<size_t> wStart, bStart;
-            {  // 以免 wIndex 和 bIndex 造成重定义
-                wStart.push_back(0);
-                bStart.push_back(0);
-                size_t wIndex = 0, bIndex = 0;
-                for (size_t nol = 1; nol < par.neur.size(); nol++) {
-                    wIndex += par.neur[nol - 1] * par.neur[nol];
-                    bIndex += par.neur[nol];
-                    wStart.push_back(wIndex);
-                    bStart.push_back(bIndex);
-                }
+            std::vector<float> loss;                                             // 每步的损失
+            std::vector<float> hGoalNext(par.hSize, 0.0f);                       // 输出层里 h 那部分的目标值
+            std::vector<float> dW(par.w.size(), 0.0f), dB(par.b.size(), 0.0f);   // 修改值
+
+            // 每层的起始下标（和 nn::Study 的 aStart / wStart 是同一套约定）：
+            //   bStart[l] = sum(neur[1..l-1])，第 l 层在 a / z 里的起点
+            //   wStart[l] = 「第 l-1 层 → 第 l 层」那段权重在 w 里的起点（wStart[1] == 0）
+            // a / z 只存 layer 1 ~ 最后一层（不含输入层），所以累加时不能把 neur[0] 算进去。
+            std::vector<size_t> bStart(par.neur.size(), 0), wStart(par.neur.size(), 0);
+            for (size_t l = 2; l < par.neur.size(); l++) {
+                bStart[l] = bStart[l - 1] + par.neur[l - 1];
+                wStart[l] = wStart[l - 1] + par.neur[l - 2] * par.neur[l - 1];
             }
 
             // StudyOneStep
-            auto StudyOneStep = [&wStart, &bStart, &dW, &dB, wlr, blr, &hGoalNext, this](
+            auto StudyOneStep = [&wStart, &bStart, &dW, &dB, wlr, blr, &hGoalNext, layerCount, this](
                 const std::vector<float>& goal, std::vector<float>& lossAll, size_t t
             ) {
-                // 初始化
-                std::vector<float> allTarget(InteUtiFun::SumUp(par.neur), 0.0f);
-
-                std::vector<float> wStart(InteUtiFun::SumOfProducts(par.neur), 0.0f), bStart(InteUtiFun::SumUp(par.neur), 0.0f);
+                // 初始化：目标的格子只给 layer 1 ~ 最后一层（和 bStart 对应，输入层没有格子）
+                std::vector<float> allTarget(InteUtiFun::SumUp(par.neur) - par.neur[0], 0.0f);
 
                 lossAll.push_back(0.0f);
                 auto& loss = lossAll.back();
 
-                {
-                    // 计算 wStart 和 bStart
-                    size_t wIndex = 0, bIndex = 0;
+                const size_t outBase = bStart[par.neur.size() - 1];   // 输出层在 a / z 里的起点
+                const size_t outWidth = par.neur.back() - par.hSize;  // 输出层里真正输出的宽度（不含 h）
 
-                    for (size_t idx = 0; idx < par.neur.size(); idx++) {
-                        // 记录 bStart
-                        bStart[idx] = bIndex;
-                        bIndex += par.neur[idx];
-
-                        // 除最后一层外，每层都记录到下一层的权重起始位置
-                        if (idx < par.neur.size() - 1) {
-                            wStart[idx] = wIndex;
-                            wIndex += par.neur[idx + 1] * par.neur[idx];
-                        }
-                    }
-                }
-
-                // 计算 allTarget
                 {
                     {
                         // 计算输出层的误差
-                        for (size_t idx = 0; idx < (par.neur.back() - par.hSize); idx++) {
-                            allTarget[bStart.back() + idx] = goal[idx] - insPar.a[t][bStart.back() + idx];    // 计算误差
-                            loss += allTarget[bStart.back() + idx] * allTarget[bStart.back() + idx];          // 计算总 loss
+                        for (size_t idx = 0; idx < outWidth; idx++) {
+                            allTarget[outBase + idx] = goal[idx] - insPar.a[t][outBase + idx];    // 计算误差
+                            loss += allTarget[outBase + idx] * allTarget[outBase + idx];          // 计算总 loss
                         }
 
-                        // 把 hGoalNext 用上
-                        for (size_t idx = (par.neur.back() - par.hSize); idx < par.neur.back(); idx++) {
-                            allTarget[bStart.back() + idx] = hGoalNext[idx] - insPar.a[t][bStart.back() + idx];    // 计算误差
-                            loss += allTarget[bStart.back() + idx] * allTarget[bStart.back() + idx];               // 计算总 loss
+                        // 把 hGoalNext 用上（目标现在恒为 0，等于先把 h 压向 0 占位）
+                        // hGoalNext 只有 hSize 个格子，下标要减掉 outWidth，不能直接用 idx
+                        for (size_t idx = outWidth; idx < par.neur.back(); idx++) {
+                            allTarget[outBase + idx] = hGoalNext[idx - outWidth] - insPar.a[t][outBase + idx];    // 计算误差
+                            loss += allTarget[outBase + idx] * allTarget[outBase + idx];                           // 计算总 loss
                         }
                     }
 
                     {
-                        // 计算隐藏层和输入层的误差
-                        for (size_t l = par.neur.size() - 1; l > 0; l--) {
+                        // 计算隐藏层的误差（往回摊到前一层）
+                        // 只推到第 2 层：第 1 层的前一层是输入层，allTarget 里没有输入层的格子
+                        // （bStart[1] == bStart[0] == 0，再往下推会把第 1 层的格子覆盖掉）
+                        for (size_t l = par.neur.size() - 1; l >= 2; l--) {
                             for (size_t neu = 0; neu < par.neur[l]; neu++) {
                                 // 计算链接的 w 的和
                                 float sum = 0.0f;
                                 for (size_t n = 0; n < par.neur[l - 1]; n++) {
-                                    sum += par.w[wStart[l - 1] + neu * par.neur[l - 1] + n];
+                                    sum += par.w[wStart[l] + neu * par.neur[l - 1] + n];
                                 }
+                                if (sum == 0.0f) continue;  // 全 0 摊不了（不然除出 inf / nan）
 
                                 for (size_t n = 0; n < par.neur[l - 1]; n++) {
-                                    float wij = par.w[wStart[l - 1] + neu * par.neur[l - 1] + n];
+                                    float wij = par.w[wStart[l] + neu * par.neur[l - 1] + n];
                                     float intenScore = wij / sum;
 
-                                    float err = 
+                                    float err =
                                         intenScore * allTarget[bStart[l] + neu];  // 计算误差
-                                    
+
                                     allTarget[bStart[l - 1] + n] += err;          // 更新误差
                                 }
                             }
@@ -372,18 +356,23 @@ namespace rnn {
                     {
                         // 计算 w 和 b 的修改值
                         for (size_t l = 1; l < par.neur.size(); l++) {
+                            // 前一层（l == 1 时就是输入层）的激活值：输入层不在 a 里，要去 x 拿
+                            // （每步往 x 里记 layerCount 条，第 l 层的输入就是第 l-1 条）
+                            const std::vector<float>& prevAct = (l == 1) ? insPar.x[t * layerCount] : insPar.a[t];
+                            const size_t prevBase = (l == 1) ? 0 : bStart[l - 1];
+
                             for (size_t neu = 0; neu < par.neur[l]; neu++) {
                                 dB[bStart[l] + neu] += blr * allTarget[bStart[l] + neu];
 
                                 for (size_t n = 0; n < par.neur[l - 1]; n++) {
-                                    dW[wStart[l - 1] + neu * par.neur[l - 1] + n] +=
-                                        wlr * allTarget[bStart[l] + neu] * insPar.a[t][bStart[l - 1] + n];
+                                    dW[wStart[l] + neu * par.neur[l - 1] + n] +=
+                                        wlr * allTarget[bStart[l] + neu] * prevAct[prevBase + n];
                                 }
                             }
                         }
                     }
                 }
-                
+
             };
 
             // =============== 开始训练 ===============
