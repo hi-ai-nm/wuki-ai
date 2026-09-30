@@ -1,28 +1,35 @@
 #include <iostream>
+#include <vector>
 
 #include "Tools.hpp"        // WukiLib：配置解析 + 工具函数
 #include "includeMain.hpp"  // WukiInclude：nn / rnn 神经网络
 
-using mc = wuki::Config;
+using wcf = wuki::Config;
 using wuki::vs_to_vs;
 
 int main() {
-    // 解析配置文件
-    mc config;
-    if (!config.parse("config.conf")) {
-        // 回退：exe 同目录（从别的工作目录启动、或双击运行时也能找到 Bin/config.conf）
-        if (!config.parse(wuki::exeDir() + "/config.conf")) {
-            std::cerr << "config.conf 打开失败" << std::endl;
-        }
+    wuki::RNN net;
+    net.set_neur({ 1 , 2 , 1 }, 3);
+
+    std::vector<std::vector<float>> targets = { { 4.0f }, { 3.0f }, { 2.0f }, { 1.0f } };
+    std::vector<std::vector<float>> error;
+
+    for (size_t t = 0; t < 20; t++) {
+        net.CleanContext();
+
+        for (size_t i = 0; i < targets.size(); i++) { net.Run(targets[i]); }
+
+        error.push_back(net.Study(targets, 0.5f, 0.4f));
     }
 
-    // 创建神经网络
-    wuki::RNN net;
-    net.set_neur(vs_to_vs(config.list("neur")));  // 设置网络结构
+    std::cout << "训练结束了" << std::endl;
+    for (auto& t : error) {
+        for (auto& tmp : t) {
+            std::cout << tmp << std::endl;
+        }
 
-    auto out = net.Run({1.0f, 0.5f});
-    std::cout << "输出: ";
-    for (auto v : out) std::cout << v << " ";
-    std::cout << std::endl;
+        std::cout << "一个 Step 结束了" << std::endl;
+    }
+
     return 0;
 }

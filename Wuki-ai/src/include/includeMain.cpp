@@ -86,7 +86,7 @@ namespace wuki {
         return impl_->net.Run(input);
     }
 
-    float RNN::Study(const std::vector<std::vector<float>>& goal, float wlr, float blr) {
+    std::vector<float> RNN::Study(const std::vector<std::vector<float>>& goal, float wlr, float blr) {
         return impl_->net.Study(goal, wlr, blr);
     }
 

@@ -77,7 +77,7 @@ namespace wuki {
         std::vector<float> Run(const std::vector<float>& input);
 
         /// 对比学习，返回 MSE 误差
-        float Study(const std::vector<std::vector<float>>& goal, float wlr = 0.01f, float blr = 0.001f);
+        std::vector<float> Study(const std::vector<std::vector<float>>& goal, float wlr = 0.01f, float blr = 0.001f);
 
         /// 设置激活函数："relu" / "silu" / "alt-sigmoid"
         void set_ActFun(const std::string& content);

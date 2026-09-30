@@ -18,7 +18,7 @@
 
 ### 1.3 学习方法（NN 和 RNN 一样，不过 RNN 多个展开）
 
-- **公式**        ：$ \text{目标激活值}_{\text{前一层}} = N \times \frac{w}{\sum |w|} \times \text{目标激活值}_{\text{当前层}} $
+- **公式**        ：$ \text{目标激活值}_{\text{前一层}} = \frac{w}{\sum |w|} \times \text{目标激活值}_{\text{当前层}} $
 - **学习函数名称** ：`Study`
 - **此方法为自创方法**，有待改善。
 

@@ -308,7 +308,7 @@ namespace nn {
                     float target = 0.0f;
                     for (size_t cnn = 0; cnn < curSize; cnn++) {
                         const float wVal = par.w[wStart[l] + cnn * prevSize + nonitpl];
-                        target += static_cast<float>(prevSize) * (wVal / sumAbsW) * error[curStart + cnn];
+                        target += (wVal / sumAbsW) * error[curStart + cnn];
                     }
                     error[prevStart + nonitpl] = target;
                 }

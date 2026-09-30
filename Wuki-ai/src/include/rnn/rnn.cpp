@@ -205,7 +205,7 @@ namespace rnn {
         }
 
         // 设置层数
-        inline void set_neur(const std::vector<size_t>& neur, bool autoInit = true, size_t hSize = 16) {
+        inline void set_neur(const std::vector<size_t>& neur, size_t hSize = 16, bool autoInit = true) {
             par.neur = neur;  // 必须先赋值：Init 是按 par.neur 来分配 w / b 的
             if (autoInit) {
                 Init(par.neur, hSize);
@@ -213,7 +213,7 @@ namespace rnn {
             par.notNeurUnde = true;
         }
 
-        inline void set_neur(std::initializer_list<size_t> neur, bool autoInit = true, size_t hSize = 16) {
+        inline void set_neur(std::initializer_list<size_t> neur, size_t hSize = 16, bool autoInit = true) {
             par.neur = neur;  // 同上：先赋值再 Init
             if (autoInit) {
                 Init(par.neur, hSize);
@@ -236,16 +236,16 @@ namespace rnn {
         // 核心公式：\text{目标激活值}_{\text{前一层}} = N \times \frac{w}{\sum |w|} \times \text{目标激活值}_{\text{当前层}}（Markdown）
         // 流程：① 输出层铺开目标 ② 逐层往回推目标 ③ 目标统一减实际激活值得到误差 ④ 用误差改 w 和 b
         // （和 nn::Study 是同一套：中途推的是「目标」，最后才减激活值）
-        float Study(const std::vector<std::vector<float>>& goal, float wlr = 0.01f, float blr = 0.001f) {
+        std::vector<float> Study(const std::vector<std::vector<float>>& goal, float wlr = 0.01f, float blr = 0.001f) {
             if (!par.notNeurUnde) {     // 没初始化就训练了
                 par.errorCode = 0x01;  // 错误码 0x01
                 par.errorBlgig = "study";
-                return (-1.0f);  // 返回负数表示错误
+                return { (-1.0f) };  // 返回负数表示错误
             }
             if (par.neur.size() < 2) {  // 层数不对
                 par.errorCode = 0x03;
                 par.errorBlgig = "study";
-                return (-3.0f);
+                return { (-3.0f) };
             }
 
             // 下面所有下标都建立在「缓存和当前结构一致」上：
@@ -261,30 +261,30 @@ namespace rnn {
                 insPar.x.size() != insPar.a.size() * layerCount) {  // 步数 / 缓存条数不对
                 par.errorCode = 0x02;
                 par.errorBlgig = "study";
-                return (-2.0f);
+                return { (-2.0f) };
             }
             for (size_t t = 0; t < goal.size(); t++) {
                 if (goal[t].size() + par.hSize != par.neur.back()) {  // 每步宽度不对
                     par.errorCode = 0x04;
                     par.errorBlgig = "study";
-                    return (-4.0f);
+                    return { (-4.0f) };
                 }
                 if (insPar.a[t].size() != stepSize || insPar.z[t].size() != stepSize) {
                     par.errorCode = 0x02;
                     par.errorBlgig = "study";
-                    return (-2.0f);
+                    return { (-2.0f) };
                 }
                 for (size_t l = 0; l < layerCount; l++) {
                     if (insPar.x[t * layerCount + l].size() != par.neur[l]) {
                         par.errorCode = 0x02;
                         par.errorBlgig = "study";
-                        return (-2.0f);
+                        return { (-2.0f) };
                     }
                 }
             }
 
             // =============== 准备展开 ===============
-            float loss = 0.0f;                              // 损失
+            std::vector<float> loss;                              // 损失
             std::vector<float> hGoalNext(par.hSize, 0.0f);  // 下一层目标值
             std::vector<float> dW(par.w.size(), 0.0f), dB(par.b.size(), 0.0f);                      // 修改值
             // 计算每层开始索引
@@ -302,11 +302,16 @@ namespace rnn {
             }
 
             // StudyOneStep
-            auto StudyOneStep = [&wStart, &bStart, &dW, &dB, wlr, blr, &loss, &hGoalNext, this](const std::vector<float>& goal, size_t t) {
+            auto StudyOneStep = [&wStart, &bStart, &dW, &dB, wlr, blr, &hGoalNext, this](
+                const std::vector<float>& goal, std::vector<float>& lossAll, size_t t
+            ) {
                 // 初始化
                 std::vector<float> allTarget(InteUtiFun::SumUp(par.neur), 0.0f);
 
                 std::vector<float> wStart(InteUtiFun::SumOfProducts(par.neur), 0.0f), bStart(InteUtiFun::SumUp(par.neur), 0.0f);
+
+                lossAll.push_back(0.0f);
+                auto& loss = lossAll.back();
 
                 {
                     // 计算 wStart 和 bStart
@@ -383,7 +388,7 @@ namespace rnn {
 
             // =============== 开始训练 ===============
             for (int t = goal.size() - 1; t >= 0; t--) {
-                StudyOneStep(goal[t], (size_t)t);
+                StudyOneStep(goal[t], loss, (size_t)t);
             }
             // =============== 更新参数 ===============
             for (size_t i = 0; i < par.w.size(); i++) { par.w[i] += dW[i]; }
