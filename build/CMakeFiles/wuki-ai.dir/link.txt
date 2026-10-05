@@ -1,1 +1,0 @@
-/usr/bin/c++ -g -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/wuki-ai.dir/src/main/main.cpp.o" -o /Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/wuki-ai  -Wl,-rpath,@loader_path /Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiInclude.dylib /Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiLib.dylib

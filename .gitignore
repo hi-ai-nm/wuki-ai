@@ -12,6 +12,9 @@ Makefile
 *.so
 *.dylib
 
+# IDE
+.vscode
+
 # exe / exec
 src/lanza-ai.exec
 src/lanza-ai.exe
@@ -26,3 +29,6 @@ lanZa-AI
 
 OKOK.txt
 公式测试.md
+思维导图-png.png
+思维导图.prg
+.clang-format

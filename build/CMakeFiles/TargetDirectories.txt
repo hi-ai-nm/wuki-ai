@@ -1,9 +1,0 @@
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/WukiInclude.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/WukiLib.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/wuki-ai.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/edit_cache.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/rebuild_cache.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/list_install_components.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/install.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/install/local.dir
-/Users/max/AI/Wuki/Wuki/build/CMakeFiles/install/strip.dir
