@@ -12,8 +12,8 @@
 #  同一个 CMakeLists 会自动适配：Windows→dll、macOS→dylib、Linux→so
 # ============================================================================
 
-# 设置最低版本（4.0.0）
-cmake_minimum_required(VERSION 4.0.0)
+# 设置最低版本（原 4.4.2，因 Docker 系统原因，降成 3.22）
+cmake_minimum_required(VERSION 3.22)
 
 # 声明工程的名称
 project(lanZa-b.a.1-ai LANGUAGES CXX)
@@ -120,7 +120,7 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
-# 安装（可选）：cmake --install . 也会把三件套放进 <prefix>/Bin
+# 安装：cmake --install . 也会把三件套放进 <prefix>/Bin
 # ---------------------------------------------------------------------------
 install(TARGETS WukiInclude WukiLib wuki-ai
     RUNTIME DESTINATION Bin

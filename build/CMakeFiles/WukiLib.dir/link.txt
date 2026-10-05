@@ -1,1 +1,1 @@
-/usr/bin/clang++ -g -arch arm64 -dynamiclib -Wl,-headerpad_max_install_names -o /Users/max/Project/Wuki/Wuki-ai/Bin/libWukiLib.dylib -install_name @rpath/libWukiLib.dylib CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o  -Wl,-rpath,@loader_path
+/usr/bin/c++ -g -arch arm64 -dynamiclib -Wl,-headerpad_max_install_names -o /Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiLib.dylib -install_name @rpath/libWukiLib.dylib CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o  -Wl,-rpath,@loader_path

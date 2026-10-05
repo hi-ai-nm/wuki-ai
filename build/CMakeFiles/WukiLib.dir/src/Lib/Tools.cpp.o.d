@@ -1,7 +1,7 @@
 CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/SDKSettings.json \
-  /Users/max/Project/Wuki/Wuki-ai/src/Lib/Tools.cpp \
-  /Users/max/Project/Wuki/Wuki-ai/src/Lib/MyConfig.hpp \
+  /Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib/Tools.cpp \
+  /Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib/MyConfig.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/iostream \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config_site \
@@ -1018,9 +1018,9 @@ CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/path_iterator.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/recursive_directory_iterator.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/u8path.h \
-  /Users/max/Project/Wuki/Wuki-ai/src/Lib/MyTool.hpp \
-  /Users/max/Project/Wuki/Wuki-ai/src/Lib/Tools.hpp \
-  /Users/max/Project/Wuki/Wuki-ai/src/include/WukiExport.hpp \
+  /Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib/MyTool.hpp \
+  /Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib/Tools.hpp \
+  /Users/max/AI/Wuki/Wuki/Wuki-ai/src/include/WukiExport.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/mach-o/dyld.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/stdbool.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include/stdbool.h \

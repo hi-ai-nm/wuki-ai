@@ -54,10 +54,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/max/Project/Wuki/Wuki-ai
+CMAKE_SOURCE_DIR = /Users/max/AI/Wuki/Wuki/Wuki-ai
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/max/Project/Wuki/build
+CMAKE_BINARY_DIR = /Users/max/AI/Wuki/Wuki/build
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -91,14 +91,14 @@ clean: CMakeFiles/wuki-ai.dir/clean
 CMakeFiles/WukiInclude.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/WukiInclude.dir/build.make CMakeFiles/WukiInclude.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/WukiInclude.dir/build.make CMakeFiles/WukiInclude.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/Project/Wuki/build/CMakeFiles --progress-num=1,2 "Built target WukiInclude"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/AI/Wuki/Wuki/build/CMakeFiles --progress-num=1,2 "Built target WukiInclude"
 .PHONY : CMakeFiles/WukiInclude.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/WukiInclude.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/WukiInclude.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 0
 .PHONY : CMakeFiles/WukiInclude.dir/rule
 
 # Convenience name for target.
@@ -108,7 +108,7 @@ WukiInclude: CMakeFiles/WukiInclude.dir/rule
 # codegen rule for target.
 CMakeFiles/WukiInclude.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/WukiInclude.dir/build.make CMakeFiles/WukiInclude.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/Project/Wuki/build/CMakeFiles --progress-num=1,2 "Finished codegen for target WukiInclude"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/AI/Wuki/Wuki/build/CMakeFiles --progress-num=1,2 "Finished codegen for target WukiInclude"
 .PHONY : CMakeFiles/WukiInclude.dir/codegen
 
 # clean rule for target.
@@ -123,14 +123,14 @@ CMakeFiles/WukiInclude.dir/clean:
 CMakeFiles/WukiLib.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/WukiLib.dir/build.make CMakeFiles/WukiLib.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/WukiLib.dir/build.make CMakeFiles/WukiLib.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/Project/Wuki/build/CMakeFiles --progress-num=3,4 "Built target WukiLib"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/AI/Wuki/Wuki/build/CMakeFiles --progress-num=3,4 "Built target WukiLib"
 .PHONY : CMakeFiles/WukiLib.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/WukiLib.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/WukiLib.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 0
 .PHONY : CMakeFiles/WukiLib.dir/rule
 
 # Convenience name for target.
@@ -140,7 +140,7 @@ WukiLib: CMakeFiles/WukiLib.dir/rule
 # codegen rule for target.
 CMakeFiles/WukiLib.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/WukiLib.dir/build.make CMakeFiles/WukiLib.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/Project/Wuki/build/CMakeFiles --progress-num=3,4 "Finished codegen for target WukiLib"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/AI/Wuki/Wuki/build/CMakeFiles --progress-num=3,4 "Finished codegen for target WukiLib"
 .PHONY : CMakeFiles/WukiLib.dir/codegen
 
 # clean rule for target.
@@ -156,14 +156,14 @@ CMakeFiles/wuki-ai.dir/all: CMakeFiles/WukiInclude.dir/all
 CMakeFiles/wuki-ai.dir/all: CMakeFiles/WukiLib.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/wuki-ai.dir/build.make CMakeFiles/wuki-ai.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/wuki-ai.dir/build.make CMakeFiles/wuki-ai.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/Project/Wuki/build/CMakeFiles --progress-num=5,6 "Built target wuki-ai"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/AI/Wuki/Wuki/build/CMakeFiles --progress-num=5,6 "Built target wuki-ai"
 .PHONY : CMakeFiles/wuki-ai.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/wuki-ai.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 6
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 6
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/wuki-ai.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 0
 .PHONY : CMakeFiles/wuki-ai.dir/rule
 
 # Convenience name for target.
@@ -173,7 +173,7 @@ wuki-ai: CMakeFiles/wuki-ai.dir/rule
 # codegen rule for target.
 CMakeFiles/wuki-ai.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/wuki-ai.dir/build.make CMakeFiles/wuki-ai.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/Project/Wuki/build/CMakeFiles --progress-num=5,6 "Finished codegen for target wuki-ai"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/max/AI/Wuki/Wuki/build/CMakeFiles --progress-num=5,6 "Finished codegen for target wuki-ai"
 .PHONY : CMakeFiles/wuki-ai.dir/codegen
 
 # clean rule for target.

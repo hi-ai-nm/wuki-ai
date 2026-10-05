@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "/Users/max/Project/Wuki/Wuki-ai/Bin/wuki-ai"
-  "/Users/max/Project/Wuki/Wuki-ai/Bin/wuki-ai.pdb"
+  "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/wuki-ai"
+  "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/wuki-ai.pdb"
   "CMakeFiles/wuki-ai.dir/src/main/main.cpp.o"
   "CMakeFiles/wuki-ai.dir/src/main/main.cpp.o.d"
 )

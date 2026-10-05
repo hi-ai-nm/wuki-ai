@@ -1,4 +1,4 @@
-# Install script for directory: /Users/max/Project/Wuki/Wuki-ai
+# Install script for directory: /Users/max/AI/Wuki/Wuki/Wuki-ai
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -38,7 +38,7 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin" TYPE SHARED_LIBRARY FILES "/Users/max/Project/Wuki/Wuki-ai/Bin/libWukiInclude.dylib")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin" TYPE SHARED_LIBRARY FILES "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiInclude.dylib")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/Bin/libWukiInclude.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/Bin/libWukiInclude.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
@@ -51,7 +51,7 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin" TYPE SHARED_LIBRARY FILES "/Users/max/Project/Wuki/Wuki-ai/Bin/libWukiLib.dylib")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin" TYPE SHARED_LIBRARY FILES "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiLib.dylib")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/Bin/libWukiLib.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/Bin/libWukiLib.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
@@ -64,7 +64,7 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin" TYPE EXECUTABLE FILES "/Users/max/Project/Wuki/Wuki-ai/Bin/wuki-ai")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/Bin" TYPE EXECUTABLE FILES "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/wuki-ai")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/Bin/wuki-ai" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/Bin/wuki-ai")
     if(CMAKE_INSTALL_DO_STRIP)
@@ -76,7 +76,7 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/max/Project/Wuki/build/install_local_manifest.txt"
+  file(WRITE "/Users/max/AI/Wuki/Wuki/build/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()
 if(CMAKE_INSTALL_COMPONENT)
@@ -92,6 +92,6 @@ else()
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/max/Project/Wuki/build/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "/Users/max/AI/Wuki/Wuki/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

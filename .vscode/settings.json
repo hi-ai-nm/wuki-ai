@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/Users/max/Project/Wuki/Wuki-ai"
+    "cmake.sourceDirectory": "/Users/max/AI/Wuki/Wuki/Wuki-ai",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

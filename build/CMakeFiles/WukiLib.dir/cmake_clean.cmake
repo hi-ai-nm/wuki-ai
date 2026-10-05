@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "/Users/max/Project/Wuki/Wuki-ai/Bin/libWukiLib.dylib"
-  "/Users/max/Project/Wuki/Wuki-ai/Bin/libWukiLib.pdb"
+  "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiLib.dylib"
+  "/Users/max/AI/Wuki/Wuki/Wuki-ai/Bin/libWukiLib.pdb"
   "CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o"
   "CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o.d"
 )

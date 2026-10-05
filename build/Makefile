@@ -57,10 +57,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/max/Project/Wuki/Wuki-ai
+CMAKE_SOURCE_DIR = /Users/max/AI/Wuki/Wuki/Wuki-ai
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/max/Project/Wuki/build
+CMAKE_BINARY_DIR = /Users/max/AI/Wuki/Wuki/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -132,17 +132,10 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles /Users/max/Project/Wuki/build//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles /Users/max/AI/Wuki/Wuki/build//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/AI/Wuki/Wuki/build/CMakeFiles 0
 .PHONY : all
-
-# The main codegen target
-codegen: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles /Users/max/Project/Wuki/build//CMakeFiles/progress.marks
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 codegen
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Project/Wuki/build/CMakeFiles 0
-.PHONY : codegen
 
 # The main clean target
 clean:
@@ -285,7 +278,6 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... codegen"
 	@echo "... edit_cache"
 	@echo "... install"
 	@echo "... install/local"

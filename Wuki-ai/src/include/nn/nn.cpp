@@ -30,6 +30,7 @@ namespace nn {
     // 写在全局作用域的话两个文件会重定义（rnn.cpp 里也有一个同名别名）。
     using json = nlohmann::json;
     // 激活函数名（原为 _ActFun_* 宏；宏不受 namespace 约束，改为 namespace 内常量）
+    static constexpr const char* ActFun_SelfCreTanh = "scth";
     static constexpr const char* ActFun_ReLU = "relu";
     static constexpr const char* ActFun_SiLU = "silu";
     static constexpr const char* Alternative_ActFun_Sigmoid = "alt-sigmoid";
@@ -38,7 +39,7 @@ namespace nn {
         std::vector<float> w;
         std::vector<float> b;
 
-        std::string actFun = ActFun_ReLU;  // 激活函数
+        std::string actFun = ActFun_SiLU;  // 激活函数
 
         std::vector<size_t> neur;  // 每层神经元数量
         bool notNeurUnde = false;  // 是否已定义 neur
@@ -107,7 +108,9 @@ namespace nn {
 
                     // 计算 a（激活函数）
                     float a;
-                    if (par.actFun == ActFun_ReLU) {
+                    if (par.actFun == ActFun_SelfCreTanh) {
+                        a = std::tanh(z / 2.0f) * 2.0f;
+                    } else if (par.actFun == ActFun_ReLU) {
                         a = z > 0 ? z : 0;
                     } else if (par.actFun == ActFun_SiLU) {
                         a = z / (1.0f + expf(-z));
@@ -161,10 +164,10 @@ namespace nn {
                         if (connectCount >= WBC) {
                             x = 0.08f;  // 超过限制，使用权重 0.08
                         } else {
-                            x = InteUtiFun::RandomRange(gen, 0.3f, 0.6f);  // 未超过，使用随机权重
+                            x = InteUtiFun::RandomRange(gen, (-0.5f), 0.5f)  // 未超过，使用随机权重
                         }
 #else
-                        x = InteUtiFun::RandomRange(gen, 0.3f, 0.6f);
+                        x = InteUtiFun::RandomRange(gen, (-0.5f), 0.5f);
 #endif
                         par.w[wIndex] = x;
                         wIndex++;
@@ -175,7 +178,7 @@ namespace nn {
 
             // 初始化偏置 b
             for (auto& b : par.b) {
-                b = InteUtiFun::RandomRange(gen, 0.3f, 0.6f);
+                b = InteUtiFun::RandomRange(gen, (-0.3f), 0.3f);
             }
             return 0x00;
         }

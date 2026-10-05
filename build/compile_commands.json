@@ -1,20 +1,20 @@
 [
 {
-  "directory": "/Users/max/Project/Wuki/build",
-  "command": "/usr/bin/clang++ -DWUKI_INCLUDE_BUILD -DWukiInclude_EXPORTS -I/Users/max/Project/Wuki/Wuki-ai/src/include -g -std=c++20 -arch arm64 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/WukiInclude.dir/src/include/includeMain.cpp.o -c /Users/max/Project/Wuki/Wuki-ai/src/include/includeMain.cpp",
-  "file": "/Users/max/Project/Wuki/Wuki-ai/src/include/includeMain.cpp",
+  "directory": "/Users/max/AI/Wuki/Wuki/build",
+  "command": "/usr/bin/c++ -DWUKI_INCLUDE_BUILD -DWukiInclude_EXPORTS -I/Users/max/AI/Wuki/Wuki/Wuki-ai/src/include -g -std=c++20 -arch arm64 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/WukiInclude.dir/src/include/includeMain.cpp.o -c /Users/max/AI/Wuki/Wuki/Wuki-ai/src/include/includeMain.cpp",
+  "file": "/Users/max/AI/Wuki/Wuki/Wuki-ai/src/include/includeMain.cpp",
   "output": "CMakeFiles/WukiInclude.dir/src/include/includeMain.cpp.o"
 },
 {
-  "directory": "/Users/max/Project/Wuki/build",
-  "command": "/usr/bin/clang++ -DWUKI_LIB_BUILD -DWukiLib_EXPORTS -I/Users/max/Project/Wuki/Wuki-ai/src/Lib -I/Users/max/Project/Wuki/Wuki-ai/src/include -g -std=c++20 -arch arm64 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o -c /Users/max/Project/Wuki/Wuki-ai/src/Lib/Tools.cpp",
-  "file": "/Users/max/Project/Wuki/Wuki-ai/src/Lib/Tools.cpp",
+  "directory": "/Users/max/AI/Wuki/Wuki/build",
+  "command": "/usr/bin/c++ -DWUKI_LIB_BUILD -DWukiLib_EXPORTS -I/Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib -I/Users/max/AI/Wuki/Wuki/Wuki-ai/src/include -g -std=c++20 -arch arm64 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o -c /Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib/Tools.cpp",
+  "file": "/Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib/Tools.cpp",
   "output": "CMakeFiles/WukiLib.dir/src/Lib/Tools.cpp.o"
 },
 {
-  "directory": "/Users/max/Project/Wuki/build",
-  "command": "/usr/bin/clang++  -I/Users/max/Project/Wuki/Wuki-ai/src/include -I/Users/max/Project/Wuki/Wuki-ai/src/Lib -g -std=c++20 -arch arm64 -o CMakeFiles/wuki-ai.dir/src/main/main.cpp.o -c /Users/max/Project/Wuki/Wuki-ai/src/main/main.cpp",
-  "file": "/Users/max/Project/Wuki/Wuki-ai/src/main/main.cpp",
+  "directory": "/Users/max/AI/Wuki/Wuki/build",
+  "command": "/usr/bin/c++  -I/Users/max/AI/Wuki/Wuki/Wuki-ai/src/include -I/Users/max/AI/Wuki/Wuki/Wuki-ai/src/Lib -g -std=c++20 -arch arm64 -o CMakeFiles/wuki-ai.dir/src/main/main.cpp.o -c /Users/max/AI/Wuki/Wuki/Wuki-ai/src/main/main.cpp",
+  "file": "/Users/max/AI/Wuki/Wuki/Wuki-ai/src/main/main.cpp",
   "output": "CMakeFiles/wuki-ai.dir/src/main/main.cpp.o"
 }
 ]

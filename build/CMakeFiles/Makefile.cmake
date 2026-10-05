@@ -7,7 +7,7 @@ set(CMAKE_DEPENDS_GENERATOR "Unix Makefiles")
 # The top level Makefile was generated from the following files:
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
-  "/Users/max/Project/Wuki/Wuki-ai/CMakeLists.txt"
+  "/Users/max/AI/Wuki/Wuki/Wuki-ai/CMakeLists.txt"
   "CMakeFiles/4.4.2/CMakeCXXCompiler.cmake"
   "CMakeFiles/4.4.2/CMakeSystem.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeCXXInformation.cmake"

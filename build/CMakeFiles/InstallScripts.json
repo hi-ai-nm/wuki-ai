@@ -1,7 +1,7 @@
 {
 	"InstallScripts" : 
 	[
-		"/Users/max/Project/Wuki/build/cmake_install.cmake"
+		"/Users/max/AI/Wuki/Wuki/build/cmake_install.cmake"
 	],
 	"Parallel" : false
 }
