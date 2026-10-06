@@ -164,7 +164,7 @@ namespace nn {
                         if (connectCount >= WBC) {
                             x = 0.08f;  // 超过限制，使用权重 0.08
                         } else {
-                            x = InteUtiFun::RandomRange(gen, (-0.5f), 0.5f)  // 未超过，使用随机权重
+                            x = InteUtiFun::RandomRange(gen, (-0.5f), 0.5f);  // 未超过，使用随机权重
                         }
 #else
                         x = InteUtiFun::RandomRange(gen, (-0.5f), 0.5f);

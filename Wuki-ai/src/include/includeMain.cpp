@@ -160,6 +160,10 @@ namespace wuki {
         return impl_->net.obtainInputTarget();
     }
 
+    std::vector<std::vector<float>> RNN::obtainInputTargets() {
+        return impl_->net.obtainInputTargets();
+    }
+
     std::size_t RNN::errorCode() const {
         return impl_->net.par.errorCode;
     }

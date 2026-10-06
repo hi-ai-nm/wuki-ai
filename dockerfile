@@ -16,4 +16,8 @@ COPY Wuki-ai .
 RUN cmake -S . -B build && cmake --build build -j"$(nproc)"
 
 # 运行
-CMD ["./Bin/wuki-ai"]
+# 用 ENTRYPOINT 而不是 CMD：CMD 会被 docker run 后面的参数整个替换掉（变成去 exec 那个路径），
+# ENTRYPOINT 则是「固定跑 wuki-ai，后面的参数原样当 argv[1..] 传进去」——
+# 所以 `docker run --rm -v "$PWD/Bin:/out" docker_run /out/drnn.model.json`
+# 就是「把训练好的模型写到挂载进来的目录」，不带参数时和以前一样用默认路径
+ENTRYPOINT ["./Bin/wuki-ai"]

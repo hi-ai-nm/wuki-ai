@@ -1,8 +1,8 @@
 // 双层 RNN 架构的 SaveLoad 类
 
 #pragma once
-#ifndef DRNNSL_HPP
-#define DRNNSL_HPP
+#ifndef LLM_DRNNSL_HPP
+#define LLM_DRNNSL_HPP
 
 #include "architecture.hpp"      // Arch::DRNN（同一目录）
 #include "../external/json.hpp"  // nlohmann/json（经 -I src/include 解析到 src/external/json.hpp）
@@ -246,4 +246,4 @@ namespace Arch {
     };
 }  // namespace Arch
 
-#endif  // DRNNSL_HPP
+#endif  // LLM_DRNNSL_HPP

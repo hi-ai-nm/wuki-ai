@@ -61,7 +61,17 @@ namespace rnn {
 
         std::vector<float> h;  // 隐状态
 
-        std::vector<float> inputTarget; // 输入层的目标
+        /*
+         * 每一步反推回输入层的目标（给「上一个网络」当训练目标用）
+         *
+         * 长度 = 步数；inputTargets[t] 的宽度 = neur[0] - hSize（输入层的真实宽度，不含 h 段）。
+         *
+         * 为什么要留下每一步的：双层架构（DRNN）里 outRNN 一次要吃掉 allRNN 一整块的产出
+         * —— 那是好几片，一片一步喂进去 —— 拼出 allRNN 需要的整块目标就必须拿到「每一片」
+         * 的目标。只留第 0 步那一份时，一块切两片以上就永远拼不满宽度（Train 只能报错退出）。
+         */
+        std::vector<std::vector<float>> inputTargets;
+        std::vector<float> inputTarget;  // == inputTargets[0]（保留：单步 / 老用法的入口）
     };
 
     class RNN {
@@ -69,7 +79,8 @@ namespace rnn {
         Pars par;
         InsPar insPar;
 
-        // CleanContext 函数：清空「这一条序列」的上下文（隐状态 h + 瞬时参数 a / z / x）
+        // CleanContext 函数：清空「这一条序列」的上下文（隐状态 h + 瞬时参数 a / z / x
+        // + 反推出来的输入层目标）
         // （h 就是 RNN 的上下文，换一条序列就该从 0 开始；hTarSteps 不在这里清，
         //   它不属于某一条序列，只在换结构时清）
         inline void CleanContext() {
@@ -77,6 +88,11 @@ namespace rnn {
             insPar.z.clear();
             insPar.x.clear();
             insPar.h.assign(par.hSize, 0.0f);
+
+            // 输入层目标是「这条序列」反推出来的，换序列就作废（留着会让调用方
+            // 拿到上一条序列的目标去训练上一个网络）
+            insPar.inputTargets.clear();
+            insPar.inputTarget.clear();
         }
 
         // Run 函数
@@ -262,6 +278,9 @@ namespace rnn {
          * @param goals  每一步的目标，goals[t].size() 必须等于「输出层宽度 - hSize」
          * @param inputs 每一步的输入，inputs[t].size() 必须等于「输入层宽度 - hSize」
          * @return 每一步的 MSE 误差（长度 = 步数）；出错返回空 vector，原因见 errorCode() / errorInfo()
+         *
+         * 顺带产出 insPar.inputTargets：每一步反推回输入层的目标，见 obtainInputTargets()。
+         * 失败路径上它是空的（不会留下半步的残值）。
          */
         std::vector<float> Train(const std::vector<std::vector<float>>& goals,
                                  const std::vector<std::vector<float>>& inputs,
@@ -342,6 +361,9 @@ namespace rnn {
             std::vector<float> dW(par.w.size(), 0.0f);         // 整段的权重修改量
             std::vector<float> dB(par.b.size(), 0.0f);         // 整段的偏置修改量
 
+            // 每步的位置先开好：下面倒着走，走到哪一步就填哪一格（t = steps-1 ... 0）
+            insPar.inputTargets.assign(steps, std::vector<float>());
+
             for (size_t t = steps; t-- > 0;) {  // t = steps-1 ... 0
                 const std::vector<float>& aFlat = insPar.a[t];               // 本步的激活值（第 1 层 ~ 最后一层首尾相接）
                 const std::vector<float>& x0 = insPar.x[t * layerCount];     // 第 1 层的输入 = input ‖ h（也就是输入层）
@@ -416,9 +438,10 @@ namespace rnn {
                     }
                 }
 
-                // 3. 更新inputTarget：给上一个网络链接用
-                // 把输入层的目标（不含 h）存下来
-                insPar.inputTarget.assign(tg.begin() + aStart[0], tg.begin() + aStart[0] + inWidth);
+                // 3. 更新inputTargets：给上一个网络链接用
+                // 把输入层的目标（不含 h）存到「本步」那一格（t = 0 的那格最后才写，
+                // 因为整段是倒着走的）
+                insPar.inputTargets[t].assign(tg.begin() + aStart[0], tg.begin() + aStart[0] + inWidth);
             }
 
             // 4. 整段的目标都推完、误差都算完之后，再统一更新一次
@@ -429,6 +452,9 @@ namespace rnn {
             for (size_t i = 0; i < par.b.size(); i++) {
                 par.b[i] += dB[i];
             }
+
+            // 老入口 inputTarget 就是第 0 步那一份（obtainInputTarget 用它）
+            insPar.inputTarget = insPar.inputTargets[0];
 
             return loss;  // 每一步的 MSE 误差
         }
@@ -630,6 +656,19 @@ namespace rnn {
 
         inline std::vector<float> obtainInputTarget() {
             return insPar.inputTarget;
+        }
+
+        /**
+         * 每一步反推回输入层的目标（obtainInputTarget 的整段版本）
+         *
+         * 长度 = 上一次 Train 的步数，每格宽度 = neur[0] - hSize；
+         * 没 Train 过（或 Train 失败 / CleanContext 之后）返回空列表。
+         *
+         * 给「一个网络喂另一个网络」的架构用：下游网络这一整段的输入目标，
+         * 就是上游网络该产出的那一整块（多片拼起来要用到每一片的目标）。
+         */
+        inline std::vector<std::vector<float>> obtainInputTargets() {
+            return insPar.inputTargets;
         }
     };
 };  // namespace rnn

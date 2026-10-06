@@ -146,6 +146,18 @@ namespace wuki {
 
         std::vector<float> obtainInputTarget();
 
+        /**
+         * 上一次 Train 里「每一步」反推回输入层的目标（obtainInputTarget 的整段版本）
+         *
+         * 长度 = 步数，每格宽度 = 「输入层宽度 - hSize」；没 Train 过 / Train 失败 /
+         * CleanContext 之后是空列表。
+         *
+         * 给「一个网络喂另一个网络」的架构用（Arch::DRNN 的 Train）：下游网络整段的
+         * 输入目标就是上游网络该产出的那一整块 —— 一块切成好几片时，只拿第 0 步那份
+         * 是拼不满宽度的。
+         */
+        std::vector<std::vector<float>> obtainInputTargets();
+
         /// 最近一次的错误码 / 错误归属（无错误时为 0x00 / "not error"）
         std::size_t errorCode() const;
         std::string errorInfo() const;

@@ -264,11 +264,23 @@ namespace Arch {
                 return { {}, errorCode };
             }
 
-            // outRNN 回传的输入层目标（第 0 步那一份）：本该就是 allRNN 该产出的东西
-            std::vector<float> allRnnTarget = outRNN.obtainInputTarget();
-            if (allRnnTarget.size() != data.onceAllOutputNum) {
-                // 切片数 > 1 时它只有「第一片」那么宽，拼不出 allRNN 需要的整段（宽 onceAllOutputNum）
-                // → 不补 0 假装成功，直接报出来（完整支持要给 wuki::RNN 加 obtainInputTargets()）
+            // outRNN 回传的「逐步」输入层目标：第 0 块的产出被切成 sliceNum 片喂进去，
+            // 所以前 sliceNum 步的目标拼起来，正好是 allRNN 第 0 块该产出的那一整块
+            // （宽 onceAllOutputNum）—— 这就是 allRNN 该学的东西
+            const std::vector<std::vector<float>> pieceTargets = outRNN.obtainInputTargets();
+            std::vector<float> allRnnTarget;
+            allRnnTarget.reserve(data.onceAllOutputNum);
+            for (size_t s = 0; s < data.sliceNum; s++) {
+                // 每片的目标宽度必须是该片的宽度：对不上就说明目标没齐（outRNN.Train 成功了
+                // 就不该发生），拼出来的长度即使碰巧对，内容也是错位的 → 直接报错，不硬拼
+                if (s >= pieceTargets.size() || pieceTargets[s].size() != data.sliceWidth) {
+                    errorCode = 0x04;
+                    errorBlgig = "train-allRnnTarget";
+                    return { loss, errorCode };
+                }
+                allRnnTarget.insert(allRnnTarget.end(), pieceTargets[s].begin(), pieceTargets[s].end());
+            }
+            if (allRnnTarget.size() != data.onceAllOutputNum) {  // 兜底：sliceNum * sliceWidth 就是它
                 errorCode = 0x04;
                 errorBlgig = "train-allRnnTarget";
                 return { loss, errorCode };
@@ -279,7 +291,7 @@ namespace Arch {
             for (size_t t = 0; t < allOut.size(); t++) {
                 allRnnGoals[t].assign(allOut[t].begin(), allOut[t].begin() + data.onceAllOutputNum);
             }
-            allRnnGoals[0] = allRnnTarget;
+            allRnnGoals[0] = std::move(allRnnTarget);
 
             // 用 allRNN 训练（同样是 goals 在前、inputs 在后；每块宽 onceAllInputNum、目标宽 onceAllOutputNum）
             if (allRNN.Train(allRnnGoals, chunks, wlr, blr).empty()) {
