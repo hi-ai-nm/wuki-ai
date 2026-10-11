@@ -399,7 +399,8 @@ namespace rnn {
 
                     // 计算目标（传递到上一层）
                     for (size_t m = 0; m < par.neur[l - 1]; m++) {
-                        tg[aStart[l - 1] + m] += (par.w[wBase + m] / wSum) * tg[aStart[l] + n];
+                        float benchmark = (par.w[wBase + m] / wSum) * tg[aStart[l] + n];
+                        tg[aStart[l - 1] + m] += benchmark * (tg[aStart[l] + n] - insPar.a[t][bStart[l] + n]);
                     }
                 }
             }

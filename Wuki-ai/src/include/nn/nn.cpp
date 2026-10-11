@@ -311,7 +311,8 @@ namespace nn {
                     float target = 0.0f;
                     for (size_t cnn = 0; cnn < curSize; cnn++) {
                         const float wVal = par.w[wStart[l] + cnn * prevSize + nonitpl];
-                        target += (wVal / sumAbsW) * error[curStart + cnn];
+                        float benchmark = (wVal / sumAbsW) * error[curStart + cnn];
+                        target += benchmark * (error[curStart + cnn] - insPar.a[curStart + cnn]);
                     }
                     error[prevStart + nonitpl] = target;
                 }

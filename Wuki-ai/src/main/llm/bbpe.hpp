@@ -71,25 +71,35 @@ namespace BBpe {
         }
 
         // 初始化模型
-        inline void Init() {
+        inline void Init(std::vector<std::string> specialTokens = { "@__SYSTEM<END>__" , "@__CMD<PRINT>__" }) {
             model.tokens.clear();
 
             // 普通字节
-            for (size_t i = 0; i < 256; ++i) {
+            for (size_t i = 0; i < 256; i++) {
                 model.tokens.push_back(Token{
                     std::string(1, static_cast<char>(i)),
                     i
                 });
             }
 
-            // 特殊起始 token
-            model.tokens.push_back(Token{ "<__system.START__>", 256 });
-            model.tokens.push_back(Token{ "<__system.END__>", 257 });
+            // 特殊 token
+            for (size_t idx = 0; idx < specialTokens.size(); idx++) {
+                model.tokens.push_back(Token{
+                    specialTokens[idx],
+                    256 + idx
+                });
+            }
+
+            return;
         }
 
-        // 真·BPE 训练：不断选择最常见的相邻 token pair 进行合并
-        inline void Train(const Corpus& corpus) {
-            Init();
+        // 真·BBPE 训练：选最常见的相邻 token pair 进行合并，最多合并 numMerges 轮。
+        // 词表初始化是 Init 的职责，这里不再自动调 —— 想续训 / 固定词表大小都由调用方掌控。
+        // 不 Init 直接 Train：词表是空的，无事可做，直接返回。
+        inline void Train(const Corpus& corpus, size_t numMerges) {
+            if (model.tokens.empty()) {
+                return;
+            }
 
             /*
              * 一个「词」= 一条符号序列 + 词频
@@ -138,7 +148,7 @@ namespace BBpe {
                 tokenId[model.tokens[i].ch] = i;
             }
 
-            while (true) {
+            for (size_t merge = 0; merge < numMerges; ++merge) {
                 // 1. 数 pair：按词频加权（同一个词出现 100 次，它内部的 pair 就算 100 次）
                 std::map<std::pair<std::string, std::string>, size_t> pairFreq;
                 for (const Word& word : words) {

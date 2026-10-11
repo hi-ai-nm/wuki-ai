@@ -1,23 +1,34 @@
-FROM ubuntu:22.04 AS builder
+# ================= 阶段1：构建 =================
+FROM ubuntu:24.04 AS builder
 
-# 工作目录
 WORKDIR /app
 
-# 安装依赖
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
+    libdrogon-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制代码
 COPY Wuki-ai .
 
-# 配置 + 编译（-S / -B 是幂等的：build 已经在也不会像 mkdir 那样报 File exists）
-RUN cmake -S . -B build && cmake --build build -j"$(nproc)"
+# 编译（CMake 会自动创建 /app/Bin 并放入所有产物）
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build -j$(nproc)
 
-# 运行
-# 用 ENTRYPOINT 而不是 CMD：CMD 会被 docker run 后面的参数整个替换掉（变成去 exec 那个路径），
-# ENTRYPOINT 则是「固定跑 wuki-ai，后面的参数原样当 argv[1..] 传进去」——
-# 所以 `docker run --rm -v "$PWD/Bin:/out" docker_run /out/drnn.model.json`
-# 就是「把训练好的模型写到挂载进来的目录」，不带参数时和以前一样用默认路径
-ENTRYPOINT ["./Bin/wuki-ai"]
+# ================= 阶段2：运行 =================
+FROM ubuntu:24.04
+
+# 运行阶段只需要运行库，不需要 build-essential 和 cmake
+RUN apt-get update && apt-get install -y \
+    libdrogon-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录为 Bin，这样 $ORIGIN 的 rpath 才能找到同目录的动态库
+WORKDIR /app/Bin
+
+# 关键修复：把整个 /app/Bin 目录（包含 exe 和两个 .so）全部拷过来
+COPY --from=builder /app/Bin /app/Bin
+
+EXPOSE 8080
+
+CMD ["./wuki-ai"]

@@ -302,6 +302,10 @@ namespace Arch {
 
             return { loss , errorCode };  // 0x00：loss 是 outRNN 逐步的 MSE 误差
         }
+
+        std::vector<float> OutRnnInputTarget() {
+            return outRNN.obtainInputTarget();
+        }
     };
 };
 
