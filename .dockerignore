@@ -5,11 +5,7 @@ Wuki-ai/Bin/
 .vscode/
 .clang-format
 .gitignore
-公式测试.md
-思维导图-png.png
-思维导图.prg
 DevInto.md
-OKOK.txt
 
 # 注意：上面不带路径的写法（build/ 之类的）只匹配上下文根那一层，嵌套的要显式写出来。
 # Wuki-ai/build 是 host 上 cmake 生成的目录，被拷进镜像的话容器里的 cmake 会读到
