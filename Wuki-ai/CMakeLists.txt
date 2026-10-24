@@ -6,8 +6,10 @@
 #        来源：src/include/（nn + rnn），编译单元 src/include/includeMain.cpp
 #    Bin/libWukiLib.dylib      | Bin/WukiLib.dll      | Bin/libWukiLib.so
 #        来源：src/Lib（配置 + 工具），编译单元 src/Lib/Tools.cpp
+#    Bin/libWukiComm.dylib     | Bin/WukiComm.dll     | Bin/libWukiComm.so
+#        来源：src/comm（和 Flask 通信的 HTTP 服务），编译单元 src/comm/fskio.cpp
 #    Bin/wuki-ai               | Bin/wuki-ai.exe
-#        来源：src/main/main.cpp，链接上面两个动态库
+#        来源：src/main/main.cpp，链接上面三个动态库
 #
 #  同一个 CMakeLists 会自动适配：Windows→dll、macOS→dylib、Linux→so
 # ============================================================================
@@ -16,7 +18,8 @@
 cmake_minimum_required(VERSION 3.22)
 
 # 声明工程的名称
-project(lanZa-b.a.1-ai LANGUAGES CXX)
+project(Wuki LANGUAGES CXX)
+
 
 # ---------------------------------------------------------------------------
 # 全局设置
@@ -68,6 +71,10 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(WukiInclude ${WUKI_LIBRARY_TYPE} src/include/includeMain.cpp)
 
+target_compile_options(WukiInclude PRIVATE
+    $<$<CONFIG:Release>:-O3 -march=native -flto>
+)
+
 target_include_directories(WukiInclude
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/include")
 
@@ -86,6 +93,10 @@ set_target_properties(WukiInclude PROPERTIES
 # ---------------------------------------------------------------------------
 add_library(WukiLib ${WUKI_LIBRARY_TYPE} src/Lib/Tools.cpp)
 
+target_compile_options(WukiLib PRIVATE
+    $<$<CONFIG:Release>:-O3 -march=native -flto>
+)
+
 target_include_directories(WukiLib
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/Lib"
     # 只为了找到 WukiExport.hpp（导出宏）
@@ -99,30 +110,62 @@ set_target_properties(WukiLib PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)
 
-# 静态库模式：不要 dllexport / dllimport
-if(NOT BUILD_SHARED_LIBS)
-    target_compile_definitions(WukiInclude PUBLIC WUKI_STATIC)
-    target_compile_definitions(WukiLib PUBLIC WUKI_STATIC)
+# ---------------------------------------------------------------------------
+# 3) WukiComm：src/comm 以 fskio.cpp 为中心 → 动态库
+#    cpp-httplib 是 header-only（src/external/httplib.h），只在这一个编译单元里展开，
+#    所以 httplib 的符号不会漏到 exe 里；exe 看到的只是 FSKIO_HPP 里的接口
+# ---------------------------------------------------------------------------
+add_library(WukiComm ${WUKI_LIBRARY_TYPE} src/comm/fskio.cpp)
+
+target_compile_options(WukiComm PRIVATE
+    $<$<CONFIG:Release>:-O3 -march=native -flto>
+)
+
+target_include_directories(WukiComm
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/comm"
+    # 只为了找到 WukiExport.hpp（导出宏）
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/include")
+
+target_compile_definitions(WukiComm PRIVATE WUKI_COMM_BUILD)
+
+# httplib 的监听线程要线程库（Linux 上是 pthread；macOS 上是 libSystem 自带的，
+# Threads::Threads 在那里是空的，写进来不影响）
+find_package(Threads REQUIRED)
+target_link_libraries(WukiComm PUBLIC Threads::Threads)
+
+if(WIN32)
+    # Windows 上 socket 在 ws2_32 里
+    target_link_libraries(WukiComm PUBLIC ws2_32)
 endif()
 
+set_target_properties(WukiComm PROPERTIES
+    OUTPUT_NAME "WukiComm"
+    POSITION_INDEPENDENT_CODE ON
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON)
+
 # ---------------------------------------------------------------------------
-# 3) wuki-ai：src/main/main.cpp → exe / exec（链接上面两个库）
+# 4) wuki-ai：src/main/main.cpp → exe / exec（链接上面三个库）
 # ---------------------------------------------------------------------------
 add_executable(wuki-ai src/main/main.cpp)
 
-target_link_libraries(wuki-ai PRIVATE WukiInclude WukiLib)
+target_compile_options(wuki-ai PRIVATE
+    $<$<CONFIG:Release>:-O3 -march=native -flto>
+)
+
+target_link_libraries(wuki-ai PRIVATE WukiInclude WukiLib WukiComm)
 
 set_target_properties(wuki-ai PROPERTIES OUTPUT_NAME "wuki-ai")
 
 # Windows：exe 无法链接 dll（只能链接导入库），这里提醒一下链接关系
 if(WIN32)
-    message(STATUS "Windows 下运行前请确保 Bin/WukiInclude.dll 与 Bin/WukiLib.dll 和 exe 在同一目录")
+    message(STATUS "Windows 下运行前请确保 Bin 里的 WukiInclude.dll、WukiLib.dll、WukiComm.dll 和 exe 在同一目录")
 endif()
 
 # ---------------------------------------------------------------------------
-# 安装：cmake --install . 也会把三件套放进 <prefix>/Bin
+# 安装：cmake --install . 也会把这一套放进 <prefix>/Bin
 # ---------------------------------------------------------------------------
-install(TARGETS WukiInclude WukiLib wuki-ai
+install(TARGETS WukiInclude WukiLib WukiComm wuki-ai
     RUNTIME DESTINATION Bin
     LIBRARY DESTINATION Bin
     ARCHIVE DESTINATION Bin)

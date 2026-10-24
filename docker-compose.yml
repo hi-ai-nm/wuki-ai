@@ -1,0 +1,16 @@
+services:
+  wuki-ai:
+    build: .
+    image: wuki_ai_docker
+    container_name: wuki-ai
+    ports:
+      - "8689:8689" # 和 Flask 通信的端口（镜像里 CMD 是 ./wuki-ai -S，监听的就是它）
+    volumes:
+      # 只挂权重这一个文件，不挂整个 /app/Bin —— 挂目录会把镜像里的 wuki-ai 和三个 .so 盖掉。
+      # 权重是运行时生成的（镜像里没有），不挂出去的话每次重建容器都要重训。
+      # 注意挂载点必须是「文件」：宿主侧这个路径曾是空目录，目录挂进去后 Save
+      # （ofstream 打不开目录）必然失败、Load 也读不出来 —— 表现是每次启动都从头
+      # 重训、永远存不下来。现在宿主侧是空文件：首次启动训完落盘，之后启动直接
+      # Load（秒级）。想强制重训把 CMD 换成 -SR 即可。
+      - ./Bin/model.wfm:/app/Bin/model.wfm
+      

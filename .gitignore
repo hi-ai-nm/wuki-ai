@@ -32,3 +32,11 @@ OKOK.txt
 思维导图-png.png
 思维导图.prg
 .clang-format
+# 真语料（86 MB，只在本机，不进仓库）
+Wuki-ai/src/main/llm/corpus.txt
+
+# 运行时生成的权重（compose 挂载点；必须是文件，别提交）
+Bin/model.wfm
+
+# 本地 native 构建目录（名字和 build/ 错开，免得和容器里的撞）
+Wuki-ai/build-host/

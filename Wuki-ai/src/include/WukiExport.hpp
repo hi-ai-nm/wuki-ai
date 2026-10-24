@@ -6,8 +6,8 @@
  * 跨平台动态库导出 / 导入宏
  *
  * 用法：
- *   库的实现（CMake 里带 WUKI_INCLUDE_BUILD / WUKI_LIB_BUILD 宏编译）看到的是
- *   dllexport（Windows）或 visibility("default")（GCC / Clang），符号被导出；
+ *   库的实现（CMake 里带 WUKI_INCLUDE_BUILD / WUKI_LIB_BUILD / WUKI_COMM_BUILD 宏编译）
+ *   看到的是 dllexport（Windows）或 visibility("default")（GCC / Clang），符号被导出；
  *   外部使用者（exe、其它库）看到的是 dllimport，直接链接导入库即可。
  *
  *   标记任意一个类 / 函数：
@@ -37,6 +37,7 @@
 #if defined(WUKI_STATIC)
 #define WUKI_INCLUDE_API
 #define WUKI_LIB_API
+#define WUKI_COMM_API
 
 /* ---------- 动态库模式 ---------- */
 #else
@@ -50,6 +51,13 @@
 #define WUKI_LIB_API WUKI_DETAIL_EXPORT
 #else
 #define WUKI_LIB_API WUKI_DETAIL_IMPORT
+#endif
+
+/* WukiComm：和 Flask 通信的 HTTP 服务（src/comm），编译时由 CMake 定义 WUKI_COMM_BUILD */
+#if defined(WUKI_COMM_BUILD)
+#define WUKI_COMM_API WUKI_DETAIL_EXPORT
+#else
+#define WUKI_COMM_API WUKI_DETAIL_IMPORT
 #endif
 #endif
 

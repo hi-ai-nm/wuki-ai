@@ -1,12 +1,13 @@
 // Word embedding tools
 // 两个职责：
-//   1. 查表：token id → 词向量（Nearest 反向反查）
+//   1. 查表：token id → 词向量；反向反查 Nearest / Sample（带温度采样）还原 token id
 //   2. 训练：Train（Skip-gram）用语料的共现关系学这张表 —— word2vec 的思想，
 //      中心词预测上下文，正样本拉近、负采样推远；逐对更新词向量，不走网络
 #ifndef WET_HPP
 #define WET_HPP
 
 #include "framework.hpp"
+#include "optimize/simd.hpp"  // Simd::Runtime：Skip-gram 点积 / 最近邻距离 / 归一化
 #include <cstddef>  // std::size_t
 #include <cmath>    // std::exp（sigmoid）
 #include <vector>
@@ -66,6 +67,79 @@ class WorEmbd {
             return {};
         }
         return target[id];
+    }
+
+    /**
+     * 整张词向量表（存权重用）：只读引用，调用方别改它
+     *
+     * 为什么需要「整张表」而不是一行行 Get：这张表是训练出来的、不是算出来的，
+     * 存权重时必须原样带出去 —— 只存 DRNN 的话，下次启动 Init 会用 std::random_device
+     * 重新随机生成一整张表，RNN 拿到的就是噪声（线上表现：每次重启回答都不一样、而且都是乱码）。
+     *
+     * @return 表本身（没 Init 过是空表）
+     */
+    inline const std::vector<std::vector<float>>& Rows() const {
+        return target;
+    }
+
+    /**
+     * 整张词向量表（读权重用）：把存下来的表放回来
+     *
+     * 只在「表还是刚 Init 出来的随机值、没训过」的时候用（Load 之后直接接推理）。
+     * 尺寸必须和当前词表严丝合缝：行数 != tokenSize 说明语料 / merge 轮数变了，
+     * 列数 != embdSize 说明结构变了 —— 两种情况都对不上号，宁可整体失败让上层重训，
+     * 也不能让半张表（前几行对、后面全是随机）混进来，那种错查起来最费劲。
+     *
+     * @param rows 存的表
+     * @return 0 成功；1 还没 Init（不知道目标尺寸）；2 尺寸对不上 / 空表
+     */
+    inline size_t SetRows(const std::vector<std::vector<float>>& rows) {
+        if (!inited) {
+            return 1;
+        }
+        if (rows.empty() || rows.size() != target.size() || rows.front().size() != embdSize()) {
+            return 2;
+        }
+        for (const auto& row : rows) {  // 逐行再核一遍列数：别只信第一行
+            if (row.size() != embdSize()) {
+                return 2;
+            }
+        }
+        target = rows;
+        return 0;
+    }
+
+    /**
+     * 把每一行缩放到同一个范数（默认 1），且不改方向
+     *
+     * 为什么需要：Skip-gram 的更新是「拉近 / 推远」，只有方向有约束、长度没有 ——
+     * 正样本每步都在加，跑几千轮之后一行的范数能长到 4~5。而 DRNN 的监督目标是
+     * 「下一个 token 的词向量」，输出层却用饱和激活（scth 每个分量上限 ±2）。
+     * 目标范数 4.6 对上输出能力 ±2，等于让它去够一个物理上够不到的点：
+     * 实测不可消除的 MSE 地板 0.27~2.67，训练 loss 永远压不到 0，看着像"训不动"。
+     *
+     * 归一化之后所有 token 都在同一个球面上：比较变成纯夹角比较（最近邻 / 余弦），
+     * 输出层的可达半径也回到了 ±1（每个分量最大 1），scth 的 ±2 有了余量。
+     *
+     * @param norm 目标范数（必须 > 0）；每一行缩放成 |v| = norm
+     * @return 0 成功；1 还没 Init（没表可归一）；2 norm 不合法
+     */
+    inline size_t Normalize(const float norm = 1.0f) {
+        if (!inited) {
+            return 1;
+        }
+        if (norm <= 0.0f) {
+            return 2;
+        }
+        for (auto& vec : target) {
+            // 模长平方一次 SIMD 扫描；缩放也只走一遍向量
+            const float len = std::sqrt(Simd::Runtime::sum_sq(vec.data(), vec.size()));
+            if (len == 0.0f) {
+                continue;  // 全 0 行没有方向可言，跳过（也免得除 0）
+            }
+            Simd::Runtime::scale_inplace(vec.data(), norm / len, vec.size());
+        }
+        return 0;
     }
 
     /**
@@ -132,17 +206,72 @@ class WorEmbd {
                 continue;  // 候选里有越界 id：跳过（这里不整体失败，生成时少一个候选没什么）
             }
 
-            float dist = 0.0f;
-            for (size_t j = 0; j < vec.size(); ++j) {
-                const float diff = target[id][j] - vec[j];
-                dist += diff * diff;
-            }
+            const float dist = Simd::Runtime::distance_sq(target[id].data(), vec.data(), vec.size());
             if (bestId == target.size() || dist < bestDist) {
                 bestDist = dist;
                 bestId = id;
             }
         }
         return bestId;
+    }
+
+    /**
+     * 带温度的反向查找：距离转 softmax 概率采样，而不是总取最近的那个（Nearest 是 T→0 的特例）
+     *
+     * 权重 w_i = exp(−(d_i − d_min) / T)：离最优候选的平方距离差越大，被采到的概率
+     * 越低；减掉 d_min 是数值稳定（最优候选权重恒为 1，exp 不溢出）。
+     * T → 0 退化成 Nearest（贪心）；T 越大分布越平，越容易采到次近的 token。
+     *
+     * 注意 T 的量纲是「平方距离」，合理取值取决于词向量的实际尺度
+     * （Init 的 [min, max] × 维度），没有通用值，按生成效果调。
+     *
+     * @param temperature 温度；<= 0 时直接退化为 Nearest（贪心）
+     * @param gen         采样用的随机源（由调用方持有，方便复现/控制）
+     * @return 采到的 token id；入口检查和 Nearest 相同，失败返回 tokenSize()（越界哨兵）
+     */
+    inline size_t Sample(const std::vector<float>& vec, const std::vector<size_t>& candidates,
+                         const float temperature, std::mt19937& gen) const {
+        if (!inited || vec.empty() || vec.size() != embdSize() || candidates.empty()) {
+            return target.size();
+        }
+        if (temperature <= 0.0f) {
+            return Nearest(vec, candidates);  // 零温 = 贪心
+        }
+
+        std::vector<std::pair<size_t, float>> scored;
+        scored.reserve(candidates.size());
+        float minDist = 0.0f;
+        for (const size_t id : candidates) {
+            if (id >= target.size()) {
+                continue;  // 和 Nearest 一致：越界候选跳过
+            }
+            const float dist = Simd::Runtime::distance_sq(target[id].data(), vec.data(), vec.size());
+            if (scored.empty() || dist < minDist) {
+                minDist = dist;
+            }
+            scored.emplace_back(id, dist);
+        }
+        if (scored.empty()) {
+            return target.size();  // 候选全是越界 id
+        }
+
+        std::vector<float> weights(scored.size());
+        float sum = 0.0f;
+        for (size_t i = 0; i < scored.size(); ++i) {
+            weights[i] = std::exp(-(scored[i].second - minDist) / temperature);
+            sum += weights[i];
+        }
+
+        std::uniform_real_distribution<float> pick(0.0f, sum);
+        float acc = 0.0f;
+        const float r = pick(gen);
+        for (size_t i = 0; i < scored.size(); ++i) {
+            acc += weights[i];
+            if (r <= acc) {
+                return scored[i].first;
+            }
+        }
+        return scored.back().first;  // 浮点累加误差兜底
     }
 
     // ------------------------------------------------------------------
@@ -169,20 +298,17 @@ class WorEmbd {
     /*
      * 一对 (a, b) 的更新；label = 1 是正样本（拉近），0 是负样本（推远）
      * 调用方保证 a != b（负采样里会跳过中心自己，自己推自己会一行向量两头更新打架）
+     *
+     * 两个分量的更新互相依赖（va += g·vb 要用旧 vb，vb += g·va 要用旧 va），
+     * 原来为此整份拷贝一份 va 再循环；其实按分量各留一个标量旧值就够了 ——
+     * 每对省一次堆分配 + 一份向量拷贝。Skip-gram 阶段是几十亿次调用，省下的时间可观。
      */
     inline void SgdPair(const size_t a, const size_t b, const float lr, const float label) {
         std::vector<float>& va = target[a];
         std::vector<float>& vb = target[b];
-        float dot = 0.0f;
-        for (size_t j = 0; j < va.size(); ++j) {
-            dot += va[j] * vb[j];
-        }
-        const float g = lr * (label - Sigmoid(dot));
-        const std::vector<float> oldA = va;  // vb 的更新要用旧 va，先抄一份再动
-        for (size_t j = 0; j < va.size(); ++j) {
-            va[j] += g * vb[j];
-            vb[j] += g * oldA[j];
-        }
+        // 点积和「两边各自用对方旧值」的耦合更新都是纯逐元素运算，整对交给 SIMD
+        const float g = lr * (label - Sigmoid(Simd::Runtime::dot(va.data(), vb.data(), va.size())));
+        Simd::Runtime::paired_update(va.data(), vb.data(), g, va.size());
     }
 
     /*

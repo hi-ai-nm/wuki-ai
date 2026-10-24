@@ -82,7 +82,7 @@ namespace Arch {
             }
             return 0x00;
         }
-
+        
         /*
          * 丢掉 allRNN 自己尾部的 allRnnHSize 个 h（它不属于 DRNN 的语义输出），
          * 再按 sliceWidth 切成 sliceNum 片，每片正好是 outRNN 的输入层宽度
@@ -106,7 +106,8 @@ namespace Arch {
             const std::vector<size_t>& allRnnNeur = { 48 , }, /* 不含输入层和输出层 */
             const size_t onceAllInputNum = 32,
             const size_t onceAllOutputNum = 32,
-            const size_t outRnnHSize = 16, const size_t allRnnHSize = 32
+            const size_t outRnnHSize = 16, const size_t allRnnHSize = 32,
+            const std::string actFun = "silu" /* 两个子网的激活函数，见 rnn.cpp 的白名单 */
         ) {
             errorCode = 0x00;
             errorBlgig = "not error";
@@ -130,6 +131,12 @@ namespace Arch {
             // outRNN 的 neur 由调用方给全（含输入层和输出层）：首项就是 allRNN 一次产出的宽度，
             // 末项是 DRNN 最终输出宽度；hSize 由 set_neur → Init 自己加到首尾，这里不要自己加 h！
             outRNN.set_neur(outRnnNeur, outRnnHSize);
+
+            // 激活函数：用饱和的（"scth" 自创 tanh，±2）而不是默认 SiLU —— 不饱和激活没有
+            // 输出天花板，多步监督下「误差大 → 更新大 → 激活大 → 误差更大」会正反馈发散；
+            // 饱和激活把激活值摁在有界区间里，是这个回路的天然刹车
+            allRNN.set_ActFun(actFun);
+            outRNN.set_ActFun(actFun);
 
             // 无需初始化，set_neur 会自动初始化 w 和 b
 
@@ -192,10 +199,11 @@ namespace Arch {
 
         /*
          * 训练：先用 allRNN 预测（和 Run 完全同一套前向）→ 再用 outRNN 学真正的输出
-         * → 最后用 outRNN 回传的输入层目标反过来训 allRNN
+         * → 最后 allRNN 用直挂真目标训练（块 t 的产出 = 下一个 token 的词向量，teacher forcing）
          *
-         * 目标约定：只有最后一片有外部目标（targets），前面的片拿「该片实际输出」当目标，
-         * 表示这一步不施加外部监督 —— 注意这不是严格的 0 误差步：RNN 输出层的 h 段目标
+         * 目标约定：outRNN 只有最后一片有外部目标（targets），前面的片拿「该片实际输出」
+         * 当目标（不施加外部监督）；allRNN 则是每一块都有真目标 —— 块 t 产出 chunks[t+1]，
+         * 最后一块产出 targets。注意无监督片不是严格的 0 误差步：RNN 输出层的 h 段目标
          * （hTar，由后一步反推上来）仍然会造成改动。
          *
          * @param targets 最后一片的目标，宽度必须等于 DRNN 的输出层真实宽度
@@ -204,7 +212,8 @@ namespace Arch {
          */
         inline std::pair<std::vector<float>, size_t> Train(
             std::vector<std::vector<float>> input, std::vector<float> targets,
-            const float wlr = 0.01f, const float blr = 0.01f
+            const float wlr = 0.01f, const float blr = 0.01f,
+            const float allScale = 1.0f  // allRNN 学习率缩放：预训练过的话调小（如 0.1），联合训练只微调它
         ) {
             errorCode = 0x00;
             errorBlgig = "not error";
@@ -264,37 +273,25 @@ namespace Arch {
                 return { {}, errorCode };
             }
 
-            // outRNN 回传的「逐步」输入层目标：第 0 块的产出被切成 sliceNum 片喂进去，
-            // 所以前 sliceNum 步的目标拼起来，正好是 allRNN 第 0 块该产出的那一整块
-            // （宽 onceAllOutputNum）—— 这就是 allRNN 该学的东西
-            const std::vector<std::vector<float>> pieceTargets = outRNN.obtainInputTargets();
-            std::vector<float> allRnnTarget;
-            allRnnTarget.reserve(data.onceAllOutputNum);
-            for (size_t s = 0; s < data.sliceNum; s++) {
-                // 每片的目标宽度必须是该片的宽度：对不上就说明目标没齐（outRNN.Train 成功了
-                // 就不该发生），拼出来的长度即使碰巧对，内容也是错位的 → 直接报错，不硬拼
-                if (s >= pieceTargets.size() || pieceTargets[s].size() != data.sliceWidth) {
-                    errorCode = 0x04;
-                    errorBlgig = "train-allRnnTarget";
-                    return { loss, errorCode };
+            // allRNN 的目标直挂（teacher forcing）：块 t 读完第 t 个输入，理想产出是
+            // 「下一个 token 的词向量」—— 也就是下一块实际读入的向量（chunks[t+1]）；
+            // 最后一块的「下一个」就是外部目标 targets。这正是「先由一个 RNN 预测后面
+            // 所有」的设计本意：每个块第一次都有真监督。
+            // 原来的取法是 outRNN 回传的 input target —— 只有第 0 块拿得到，且内容里
+            // 没有下一个词的信息 → allRNN 被训练成输出 0（块0范数三次实验塌到 1e-5
+            // 量级，loss 停在目标方差地板）。取法换掉后那段回传代码整块作废。
+            std::vector<std::vector<float>> allRnnGoals(chunks.size());
+            for (size_t t = 0; t < chunks.size(); t++) {
+                if (t + 1 < chunks.size()) {
+                    allRnnGoals[t] = chunks[t + 1];  // 下一块读入的向量（含补 0，就是下一步的真实输入）
+                } else {
+                    allRnnGoals[t] = targets;        // 最后一块：真正的预测目标
                 }
-                allRnnTarget.insert(allRnnTarget.end(), pieceTargets[s].begin(), pieceTargets[s].end());
             }
-            if (allRnnTarget.size() != data.onceAllOutputNum) {  // 兜底：sliceNum * sliceWidth 就是它
-                errorCode = 0x04;
-                errorBlgig = "train-allRnnTarget";
-                return { loss, errorCode };
-            }
-
-            // allRNN 的目标：第 0 块用 outRNN 回传的真目标，其余块用该块实际产出（丢掉 h 段）
-            std::vector<std::vector<float>> allRnnGoals(allOut.size());
-            for (size_t t = 0; t < allOut.size(); t++) {
-                allRnnGoals[t].assign(allOut[t].begin(), allOut[t].begin() + data.onceAllOutputNum);
-            }
-            allRnnGoals[0] = std::move(allRnnTarget);
 
             // 用 allRNN 训练（同样是 goals 在前、inputs 在后；每块宽 onceAllInputNum、目标宽 onceAllOutputNum）
-            if (allRNN.Train(allRnnGoals, chunks, wlr, blr).empty()) {
+            // allScale：预训练过 allRNN 的话 <1，联合训练只微调它（更新量对 lr 线性，乘分数 = 打折）
+            if (allRNN.Train(allRnnGoals, chunks, wlr * allScale, blr * allScale).empty()) {
                 errorCode = 0x03;
                 errorBlgig = "train-allRnn";
                 return { loss, errorCode };
@@ -305,6 +302,37 @@ namespace Arch {
 
         std::vector<float> OutRnnInputTarget() {
             return outRNN.obtainInputTarget();
+        }
+
+        /*
+         * 预训练 allRNN（单独训它，不碰 outRNN）：整段 goals / inputs 交给它学，返回每步 MSE
+         *
+         * 给「先预训练 allRNN、再联合微调」的流程用；样本怎么构造（正序读、倒序挂目标）
+         * 是调用方的事，见 llm.hpp 的 PretrainOne。
+         *
+         * @return 每步 MSE（长度 = 步数）；出错返回空 vector，原因见 errorCode / errorBlgig
+         */
+        inline std::vector<float> TrainAll(const std::vector<std::vector<float>>& goals,
+                                           const std::vector<std::vector<float>>& inputs,
+                                           const float wlr, const float blr) {
+            const std::vector<float> loss = allRNN.Train(goals, inputs, wlr, blr);
+            if (loss.empty()) {
+                errorCode = allRNN.errorCode();  // 内层错误透传：只返回空的话外面看不见原因
+                errorBlgig = "train-all";
+            }
+            return loss;
+        }
+
+        /*
+         * 诊断用：单独跑 allRNN 一块（h 从 0 开始），返回语义输出段（丢掉尾部的 h 段）。
+         * 正常流水线用不到 —— 给「验证 allRNN 是不是被训练成输出 0」的实验用。
+         * Run 失败返回空 / 不足 onceAllOutputNum 个时按 0 补齐，只看范数的话无所谓。
+         */
+        inline std::vector<float> DebugRunAll(const std::vector<float>& chunk) {
+            allRNN.CleanContext();
+            std::vector<float> out = allRNN.Run(chunk);
+            out.resize(data.onceAllOutputNum, 0.0f);
+            return out;
         }
     };
 };

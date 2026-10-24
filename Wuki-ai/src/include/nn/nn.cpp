@@ -3,10 +3,12 @@
 #define NN_CPP
 
 #include "nn.hpp"
+#include <algorithm>  // std::copy
 #include <cmath>
 #include <fstream>  // std::ifstream / std::ofstream
 #include <utility>  // std::move
 #include "../external/json.hpp"
+#include "../optimize/simd.hpp"  // Simd::Runtime：前向点积 / 反向 axpy
 
 /*
  * 归属 - run 编号 - 0x01：未初始化网络就运行了
@@ -26,6 +28,11 @@
  */
 
 namespace nn {
+    // SIMD 内核的短别名（放在 namespace 里：includeMain.cpp 把 nn.cpp / rnn.cpp
+    // 收进同一个编译单元，两个文件各自的全局别名会撞）
+    namespace opt = Simd::Runtime;
+    namespace study = Simd::StudyTime;
+
     // JSON 别名放在 namespace 里：includeMain.cpp 先 include nn.cpp 再 include rnn.cpp，
     // 写在全局作用域的话两个文件会重定义（rnn.cpp 里也有一个同名别名）。
     using json = nlohmann::json;
@@ -34,6 +41,23 @@ namespace nn {
     static constexpr const char* ActFun_ReLU = "relu";
     static constexpr const char* ActFun_SiLU = "silu";
     static constexpr const char* Alternative_ActFun_Sigmoid = "alt-sigmoid";
+
+    /**
+     * 激活函数在 z 点的导数 a'(z)（Study 里把误差换成 δ 用，和 rnn::ActDeriv 同一套公式）
+     *
+     * 乘上它之后，饱和区的更新自动趋 0 —— 那里本来就没有可学的自由度，
+     * 原来不乘等于硬推，网络会越推越深、卡死在饱和面上。
+     *
+     * @param actFun 激活函数名（和 Run 里的分支同一套名字）
+     * @param z      该神经元的加权和（insPar.z 里存着）
+     * @param a      该神经元的激活值（insPar.a 里存着）
+     * @return a'(z)；未知名字按 ReLU 处理（和 Run 的默认分支一致）
+     */
+    inline float ActDeriv(const std::string& actFun, const float z, const float a) {
+        // 公式只在 Simd::StudyTime::deriv_scalar 里维护一份（Study 的批量 δ 也用它），
+        // 这里保留成对外的小工具，避免两套导数漂移
+        return study::deriv_scalar(study::ParseActKind(actFun), z, a);
+    }
 
     struct Pars {  // 参数
         std::vector<float> w;
@@ -88,45 +112,34 @@ namespace nn {
 
             // 初始化
             std::vector<float> oldActVal = input;
-            std::vector<float> newActVal;
             size_t wIndex = 0;
             size_t bIndex = 0;
+            size_t actBase = 0;  // 当前层在 insPar.z / insPar.a 里的起点
+            const study::ActKind actKind = study::ParseActKind(par.actFun);
 
             // 运行
             for (size_t nol = 1; nol < par.neur.size(); nol++) {
-                newActVal.clear();
-                for (size_t cnn = 0; cnn < par.neur[nol]; cnn++) {
-                    float sum = 0;  // 加权求和
-                    for (size_t nonitpl = 0; nonitpl < par.neur[nol - 1]; nonitpl++) {
-                        sum += par.w[wIndex] * oldActVal[nonitpl];
-                        wIndex++;
-                    }
+                const size_t inCount = par.neur[nol - 1];  // 本层每个神经元的输入数
+                const size_t outCount = par.neur[nol];
 
-                    // 计算 z（加权求和 + 偏置）
-                    float z = sum + par.b[bIndex];
+                // 先整层算 z（每个神经元一行连续权重，一个 SIMD 点积），
+                // 再一次性批量激活：tanh / exp 是逐神经元的超越函数，
+                // 一次处理 width 个才用得上向量数学；同时 actFun 只在入口解析一次。
+                insPar.z.resize(actBase + outCount);
+                insPar.a.resize(actBase + outCount);
+                float* zPtr = insPar.z.data() + actBase;
+                float* aPtr = insPar.a.data() + actBase;
+                for (size_t cnn = 0; cnn < outCount; cnn++) {
+                    const float sum = opt::dot(par.w.data() + wIndex, oldActVal.data(), inCount);
+                    wIndex += inCount;
+                    zPtr[cnn] = sum + par.b[bIndex];  // z = 加权求和 + 偏置
                     bIndex++;
-
-                    // 计算 a（激活函数）
-                    float a;
-                    if (par.actFun == ActFun_SelfCreTanh) {
-                        a = std::tanh(z / 2.0f) * 2.0f;
-                    } else if (par.actFun == ActFun_ReLU) {
-                        a = z > 0 ? z : 0;
-                    } else if (par.actFun == ActFun_SiLU) {
-                        a = z / (1.0f + expf(-z));
-                    } else if (par.actFun == Alternative_ActFun_Sigmoid) {
-                        a = 1.0f / (1.0f + expf(-z));
-                    } else {
-                        a = z > 0 ? z : 0;  // 默认 ReLU
-                    }
-
-                    // 存储瞬时参数
-                    insPar.z.push_back(z);
-                    insPar.a.push_back(a);
-
-                    newActVal.push_back(a);
                 }
-                oldActVal = newActVal;
+                study::activate(actKind, zPtr, aPtr, outCount);
+
+                // 下一层的输入就是本层的激活值（和原来 push_back 的顺序完全一致）
+                oldActVal.assign(aPtr, aPtr + outCount);
+                actBase += outCount;
             }
 
             return oldActVal;
@@ -272,14 +285,12 @@ namespace nn {
 
             size_t lastLayer = numLayers - 1;
             size_t outputStart = aStart[lastLayer];
+            const study::ActKind actKind = study::ParseActKind(par.actFun);  // 整个 Study 只解析一次
 
             // ==================== 第一步：铺开目标（输出层） ====================
-            float ero = 0;  // MSE 误差
-            // 输出层的目标激活值就是 goal（误差 = goal - 实际激活值，留给第三步统一减）
-            for (size_t i = 0; i < par.neur[lastLayer]; i++) {
-                error[outputStart + i] = goal[i];
-                ero += (goal[i] - insPar.a[outputStart + i]) * (goal[i] - insPar.a[outputStart + i]);
-            }
+            // 输出层的目标激活值就是 goal（误差 = goal - 实际激活值，留给第四步的 δ 统一算）
+            std::copy(goal.begin(), goal.end(), error.begin() + outputStart);
+            const float ero = study::mse(goal.data(), insPar.a.data() + outputStart, par.neur[lastLayer]);
 
             // ==================== 第二步：逐层往回推「目标的激活值」 ====================
             // 公式（和 rnn::Study 一致）：
@@ -293,64 +304,73 @@ namespace nn {
             //
             // 只推到第 2 层为止：第 1 层的前一层是输入层，输入层没有权重，
             // error[] 里也没有它的位置（aStart[0] == 0 是第 1 层自己的格子，写进去就把第 1 层覆盖了）
+            // 每列 1/Σ|w|：Σ 是按「前一层神经元」方向累加的（W[n][m] 对 n 求和）。
+            // 权重是 [当前层][前一层] 行连续，所以一行一行扫、把 |w| 累进列向量即可 ——
+            // 不需要把整层权重转置出来（转置是 O(cur×prev) 的额外读写）。
+            std::vector<float> colSum;  // Σ_n |W[n][m]|
+            std::vector<float> invSum;  // 1 / colSum[m]，0 = 分配不了
             for (size_t l = lastLayer; l >= 2; l--) {
                 const size_t curStart = aStart[l];
                 const size_t prevStart = aStart[l - 1];
                 const size_t curSize = par.neur[l];
                 const size_t prevSize = par.neur[l - 1];
+                const float* wLayer = par.w.data() + wStart[l];
 
-                for (size_t nonitpl = 0; nonitpl < prevSize; nonitpl++) {  // 目标层的每个神经元
-                    // 计算 Σ|w|：这个神经元连出去的权重绝对值之和
-                    float sumAbsW = 0.0f;
-                    for (size_t cnn = 0; cnn < curSize; cnn++) {
-                        sumAbsW += std::abs(par.w[wStart[l] + cnn * prevSize + nonitpl]);
+                colSum.assign(prevSize, 0.0f);
+                for (size_t cnn = 0; cnn < curSize; cnn++) {
+                    study::accumulate_abs(colSum.data(), wLayer + cnn * prevSize, prevSize);
+                }
+                invSum.assign(prevSize, 0.0f);
+                for (size_t m = 0; m < prevSize; m++) {
+                    if (colSum[m] != 0.0f) {  // 全 0 就分配不了（不然除出 inf / nan）
+                        invSum[m] = 1.0f / colSum[m];
                     }
+                }
 
-                    if (sumAbsW == 0.0f) continue;  // 全 0 就分配不了（不然除出 inf / nan）
-
-                    float target = 0.0f;
-                    for (size_t cnn = 0; cnn < curSize; cnn++) {
-                        const float wVal = par.w[wStart[l] + cnn * prevSize + nonitpl];
-                        float benchmark = (wVal / sumAbsW) * error[curStart + cnn];
-                        target += benchmark * (error[curStart + cnn] - insPar.a[curStart + cnn]);
+                // 分「误差份额」，不带放大（给份额乘 N 的三种方案全部以爆炸 / 漂移 / 守卫
+                // 触发收场，和 rnn.cpp 同一个结论；饱和激活 scth 才是正解）。
+                // 目标和 rnn 一样用「先点积、最后乘一次 1/Σ|w|」：Σ份额 = 1，量级自然衰减。
+                // 4×4 分块 GEMV：out 直接写进 error 的前一层区段（与 u = error+curStart 不重叠）
+                study::backprop_targets(wLayer, error.data() + curStart, invSum.data(),
+                                        error.data() + prevStart, curSize, prevSize);
+                // invSum == 0 的列按「分配不了」处理，目标记 0（和原来的 continue 等价；
+                // 显式清零是为了挡住 0·inf / 0·NaN 这种边界）
+                for (size_t m = 0; m < prevSize; m++) {
+                    if (invSum[m] == 0.0f) {
+                        error[prevStart + m] = 0.0f;
                     }
-                    error[prevStart + nonitpl] = target;
                 }
             }
 
-            // ==================== 第三步：目标 → 误差 ====================
-            // 误差 = 目标激活值 - 实际激活值（都在激活值空间里算）
+            // ==================== 第三、四步：目标 - 激活 → δ → 更新 w / b ====================
+            // 误差 = 目标激活值 - 实际激活值（都在激活值空间里算）。
             //
             // 原来是「先按 relu 反解出目标 z（targetZ = max(目标, 0)），再减实际 z」：
             // 那等于把激活函数写死成 relu —— actFun 换成 silu / alt-sigmoid 时反解就是错的
-            // （silu 还没有解析反函数），而 rnn 那边一直是在激活值空间相减，这里对齐
-            for (size_t i = 0; i < error.size(); i++) {
-                error[i] -= insPar.a[i];
-            }
-
-            // ==================== 第四步：用误差更新 w 和 b（从输出层往第 1 层走） ====================
+            // （silu 还没有解析反函数），而 rnn 那边一直是在激活值空间相减，这里对齐。
+            //
+            // 现在把「整表相减」和「逐神经元乘导数」合成一趟 study::delta：
+            // δ = (目标 - 实际) · a'(z)，按层批量算（和 rnn::Train 的 2.5 步同一套公式）。
+            std::vector<float> deltaBuf;  // 每层复用，不随神经元数反复分配
             for (size_t l = lastLayer; l >= 1; l--) {
                 const size_t curStart = aStart[l];
                 const size_t prevStart = aStart[l - 1];
                 const size_t curSize = par.neur[l];
                 const size_t prevSize = par.neur[l - 1];
 
-                for (size_t cnn = 0; cnn < curSize; cnn++) {
-                    size_t wIdx = wStart[l] + cnn * prevSize;
+                deltaBuf.resize(curSize);
+                study::delta(actKind, insPar.z.data() + curStart, insPar.a.data() + curStart,
+                             error.data() + curStart, deltaBuf.data(), curSize);
 
-                    // 更新 w
-                    for (size_t nonitpl = 0; nonitpl < prevSize; nonitpl++) {
-                        // 第 1 层的前一层是输入层：insPar.a 里没有输入层，
-                        // a[prevStart + nonitpl] 其实是第 1 层自己的激活值，
-                        // 这里要用 Run 记下来的真实输入
-                        const float prevAct = (l == 1) ? insPar.x[nonitpl] : insPar.a[prevStart + nonitpl];
-                        par.w[wIdx] += wlr * error[curStart + cnn] * prevAct;
-                        wIdx++;
-                    }
+                // 更新 w：一个神经元一行连续权重，w += (wlr·δ)·前一层的激活值
+                // 第 1 层的前一层是输入层：insPar.a 里没有输入层，
+                // a[prevStart + nonitpl] 其实是第 1 层自己的激活值，
+                // 这里要用 Run 记下来的真实输入
+                const float* prevAct = (l == 1) ? insPar.x.data() : insPar.a.data() + prevStart;
+                study::accumulate_weights(par.w.data() + wStart[l], deltaBuf.data(), prevAct, wlr, curSize, prevSize);
 
-                    // 更新 b
-                    par.b[curStart + cnn] += blr * error[curStart + cnn];
-                }
+                // 更新 b
+                study::accumulate_bias(par.b.data() + curStart, deltaBuf.data(), blr, curSize);
             }
 
             return ero;

@@ -17,3 +17,12 @@ OKOK.txt
 Wuki-ai/build/
 Wuki-ai/.git/
 Wuki-ai/.DS_Store
+# 注意：corpus.txt（96 MB）绝对不能加到这里。dockerfile 最后一个阶段有
+#   COPY Wuki-ai/src/main/llm/corpus.txt /app/Bin/corpus.txt
+# 被 .dockerignore 挡掉的文件不在构建上下文里，那句 COPY 会直接报
+#   failed to compute cache key: "/Wuki-ai/src/main/llm/corpus.txt": not found
+# 代价是每次 build 多传 96 MB 上下文；想省掉就把这句 COPY 删掉，改成 compose 挂载。
+
+
+# 本地 native 构建目录
+Wuki-ai/build-host/

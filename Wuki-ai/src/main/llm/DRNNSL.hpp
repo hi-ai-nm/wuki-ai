@@ -226,7 +226,22 @@ namespace Arch {
                 return false;
             }
 
-            // 3. 全部验完了，才动目标：先搭临时的，最后一次性换进去
+            // 3. 结构一致性：model 已经按当前配置 Init 过时，文件里的结构必须和目标一致。
+            //    以前这里不看目标，直接把文件的结构换进去（std::swap）——于是「另一个配置
+            //    训出来的权重」也加载成功：网络输出宽度跟着文件变，和 LLM 的 embdSize 对不上，
+            //    生成时 Sample 永远返回越界哨兵，表现就是「服务起来了，但每次回复都是空串」。
+            //    对不上就当加载失败，让调用方走「重新训练 + 覆盖保存」。
+            const std::vector<size_t> curOutNeur = model.outRNN.neurons();
+            const std::vector<size_t> curAllNeur = model.allRNN.neurons();
+            if (!curOutNeur.empty() && !curAllNeur.empty() &&  // 空 = 目标还没 Init，以文件为准
+                (curOutNeur != bNeur || curAllNeur != aNeur ||
+                 model.outRNN.hSize() != outH || model.allRNN.hSize() != allH)) {
+                errorCode = 0x03;
+                errorBlgig = "load-structure: 文件结构和当前配置不一致（另一个结构训的权重）";
+                return false;
+            }
+
+            // 4. 全部验完了，才动目标：先搭临时的，最后一次性换进去
             Arch::DRNN tmp;
             if (tmp.Init(outRnnNeur, allRnnNeur, onceAllInputNum, onceAllOutputNum, outH, allH) != 0x00) {
                 errorCode = 0x05;  // 上面都查过了，这里还能被拒就是结构本身不合法（兜底）
