@@ -1,6 +1,9 @@
 build/
 test/
-Wuki-ai/Bin/
+# 排除 Bin 下所有直接子项
+Wuki-ai/Bin/*
+# 但保留 capa.conf
+!Wuki-ai/Bin/capa.conf
 .git/
 .vscode/
 .clang-format

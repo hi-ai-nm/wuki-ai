@@ -4,6 +4,7 @@
 
 #include "def.hpp"
 #include "runSimd.hpp"
+#include "../webgpu.hpp"  // Wuki::Gpu：rows·cols 够大时整块交给 GPU（否则走下面的 SIMD）
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -66,7 +67,7 @@ namespace Simd::StudyTime {
     inline float activate_scalar(ActKind kind, float z) noexcept;
     inline float deriv_scalar(ActKind kind, float z, float a) noexcept;
 
-#if (defined(__GNUC__) || defined(__clang__)) && (!defined(WUKI_SIMD_MATH) || WUKI_SIMD_MATH)
+#if defined(__GNUC__) || defined(__clang__)
     using VI = int __attribute__((vector_size(16)));
 
     /// 位模式转换（float 向量 ↔ int 向量），走 memcpy 避开严格别名问题
@@ -97,6 +98,31 @@ namespace Simd::StudyTime {
     inline auto visnan(const V v) noexcept {
         return v != v;
     }
+
+    /**
+     * std::clamp 的向量版：v < lo → lo；hi < v → hi；否则原样
+     *
+     * 和 std::clamp 一样，NaN 会原样返回（两次比较都假），±Inf 会被夹成 ±hi。
+     * 训练末尾的 clip 就是靠这个语义：Inf 允许（夹掉），NaN 才报错。
+     */
+    inline V vclamp(const V v, const float lo, const float hi) noexcept {
+        const V l = splat(lo);
+        const V h = splat(hi);
+        const V lower = vselect(v < l, l, v);
+        return vselect(h < lower, h, lower);
+    }
+
+    /// 这个寄存器里有没有 NaN（±Inf 不算 —— 它们会被 clamp 成有限值）
+    inline bool vhas_nan(const V v) noexcept {
+        const auto mask = v != v;
+        unsigned bits[4];
+        __builtin_memcpy(bits, &mask, sizeof(bits));
+        return (bits[0] | bits[1] | bits[2] | bits[3]) != 0;
+    }
+
+#endif  // 向量类型 / 掩码 / clamp / NaN 检查（近似与精确路径共用）
+
+#if (defined(__GNUC__) || defined(__clang__)) && (!defined(WUKI_SIMD_MATH) || WUKI_SIMD_MATH)
 
     /**
      * e^{-t}，要求 t >= 0
@@ -255,6 +281,18 @@ namespace Simd::StudyTime {
     inline V vderiv(const ActKind kind, const V z, const V a) noexcept {
         return deriv_scalar(kind, z, a);
     }
+    inline V vclamp(const V v, const float lo, const float hi) noexcept {
+        if (v < lo) {
+            return lo;
+        }
+        if (hi < v) {
+            return hi;
+        }
+        return v;
+    }
+    inline bool vhas_nan(const V v) noexcept {
+        return v != v;
+    }
 #endif
 
     // ========================================================================
@@ -397,6 +435,12 @@ namespace Simd::StudyTime {
      */
     inline void backprop_targets(const float* W, const float* u, const float* outScale,
                                  float* out, const std::size_t rows, const std::size_t cols) noexcept {
+        // 整块是 [rows][cols] 的「转置乘」：一次算完 cols 个输出，和 GPU 的
+        // gemt 内核一一对应。数据量不够 / 设备不可用 / 出错都会走回下面的 SIMD。
+        if (Wuki::Gpu::ShouldUse(rows * cols) && Wuki::Gpu::Gemt(W, u, outScale, out, rows, cols)) {
+            return;
+        }
+
         std::size_t m = 0;
         for (; m + width <= cols; m += width) {
             V acc0 = splat(0.0f);
@@ -445,6 +489,12 @@ namespace Simd::StudyTime {
     inline void accumulate_weights(float* dW, const float* delta, const float* prevAct,
                                    const float lr, const std::size_t rows,
                                    const std::size_t cols) noexcept {
+        // 秩 1 更新：dW[r][m] += lr·delta[r]·prevAct[m]。
+        //
+        // 这里故意不分派 GPU：这个内核要把整块 dW 上传、改完再整块读回（两次 PCIe /
+        // 统一内存搬运），而 CPU 这边是一条顺序读写、带宽拉满的流式循环。
+        // 实测（Apple M5）4M 元素时 GPU 慢 3 倍、16M 慢 6 倍，而且尺寸越大越吃亏 ——
+        // Wuki::Gpu::Rank1 仍然保留给「数据本来就在显存里」的未来调用方，Auto 模式不碰。
         std::size_t r = 0;
         for (; r + 4 <= rows; r += 4) {
             const V d0 = splat(delta[r + 0] * lr);
@@ -486,6 +536,40 @@ namespace Simd::StudyTime {
     inline void accumulate_bias(float* dB, const float* delta, const float blr,
                                 const std::size_t n) noexcept {
         Simd::Runtime::axpy(dB, delta, blr, n);
+    }
+
+    /// 数组里有没有 NaN（±Inf 不算 —— 它们会被 clip 夹成有限值）
+    inline bool has_nan(const float* a, const std::size_t n) noexcept {
+        std::size_t i = 0;
+        for (; i + width <= n; i += width) {
+            if (vhas_nan(loadu(a + i))) {
+                return true;
+            }
+        }
+        for (; i < n; ++i) {
+            if (a[i] != a[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 第 4 步收尾：w[i] += clamp(d[i], -clip, +clip)
+     *
+     * 逐元素语义和 std::clamp 完全一致：±Inf 夹成 ±clip，NaN 原样返回（所以调用方
+     * 要先用 has_nan 挡掉）。训练末尾先「查一遍 dW/dB」再「向量夹+加」，两趟分开，
+     * 任意一格 NaN 时权重一个都不动 —— 和那段注释一直想表达的「整轮拒收」一致。
+     */
+    inline void clip_add(float* w, const float* d, const float clip, const std::size_t n) noexcept {
+        std::size_t i = 0;
+        for (; i + width <= n; i += width) {
+            storeu(w + i, loadu(w + i) + vclamp(loadu(d + i), -clip, clip));
+        }
+        for (; i < n; ++i) {
+            const float v = d[i];
+            w[i] += v < -clip ? -clip : (clip < v ? clip : v);
+        }
     }
 
 }  // namespace Simd::StudyTime

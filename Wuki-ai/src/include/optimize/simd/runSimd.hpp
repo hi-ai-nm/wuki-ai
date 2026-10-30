@@ -3,6 +3,7 @@
 #define RUNSIMD_HPP
 
 #include "def.hpp"
+#include "../webgpu.hpp"  // Wuki::Gpu：数据量够大时整层交给 GPU（不可用 / 太小就回退）
 
 /*
  * Simd::Runtime —— 本项目唯一的一组 SIMD 内核
@@ -178,6 +179,12 @@ namespace Simd::Runtime {
      */
     inline void layer_forward(const float* W, const float* x, const float* b,
                               float* y, const std::size_t n, const std::size_t m) noexcept {
+        // 整层是 [n][m] 的矩阵乘向量：n·m 够大才值得一次 WebGPU 往返。
+        // 只有「真的在 GPU 上算完并读回」才返回 true；太小 / 失败都继续下面的 SIMD。
+        if (Wuki::Gpu::ShouldUse(n * m) && Wuki::Gpu::Gemv(W, x, b, y, n, m)) {
+            return;
+        }
+
         std::size_t j = 0;
         for (; j + width <= m; j += width) {
             V acc = splat(0.0f);

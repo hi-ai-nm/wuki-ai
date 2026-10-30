@@ -66,6 +66,54 @@ if(DEFINED _wuki_origin)
 endif()
 
 # ---------------------------------------------------------------------------
+# 0) WebGPU 依赖（可选）：解析 wgpu-native，产出 IMPORTED 目标 wgpu_native
+#    WUKI_WEBGPU=AUTO 时找不到 SDK 就自动降级为纯 SIMD，不影响其它平台构建
+# ---------------------------------------------------------------------------
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/WebGPU.cmake")
+
+find_package(Threads REQUIRED)  # WebGPU 的初始化要轮询回调，用 std::thread 睡 1ms
+
+# ---------------------------------------------------------------------------
+# 0.1) WukiGPU：src/optimize/webgpu（计算后端）
+#      没启用 WebGPU 时同一份源码编成「全部返回 false」的空实现，
+#      所以 WukiInclude / WukiComm / exe 的链接关系不用分两套
+# ---------------------------------------------------------------------------
+add_library(WukiGPU ${WUKI_LIBRARY_TYPE} src/optimize/webgpu/WebGpu.cpp)
+
+target_compile_options(WukiGPU PRIVATE
+    $<$<CONFIG:Release>:-O3 -march=native -flto>
+)
+
+target_include_directories(WukiGPU
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/include")
+
+if(NOT WUKI_WEBGPU_AVAILABLE)
+    target_compile_definitions(WukiGPU PRIVATE WUKI_HAS_WEBGPU=0)
+endif()
+
+target_link_libraries(WukiGPU PUBLIC Threads::Threads)
+
+# 链接 wgpu-native（可用时），并把动态库拷到 Bin/
+wuki_webgpu_attach(WukiGPU)
+
+set_target_properties(WukiGPU PROPERTIES
+    OUTPUT_NAME "WukiGPU"
+    POSITION_INDEPENDENT_CODE ON)
+
+# 二进制分发也要带上第三方许可证（Docker 镜像只拷 Bin/，源码不进去）。
+# Apache-2.0 §4(a) / BSD-3-Clause 都要求随分发提供许可证原文。
+add_custom_command(TARGET WukiGPU POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:WukiGPU>/licenses"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/external/wgpu-native-LICENSE.APACHE.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/external/wgpu-native-LICENSE.MIT.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/external/webgpu-headers-LICENSE.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/external/cpp-httplib-LICENSE.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/external/nlohmann-json-LICENSE.txt"
+            "$<TARGET_FILE_DIR:WukiGPU>/licenses/"
+    COMMENT "拷贝第三方许可证到 Bin/licenses/")
+
+# ---------------------------------------------------------------------------
 # 1) WukiInclude：src/include/ 以 includeMain.cpp 为中心 → 动态库
 #    nn、rnn 是 header-only 实现，全部由这一个编译单元收拢进库
 # ---------------------------------------------------------------------------
@@ -77,6 +125,9 @@ target_compile_options(WukiInclude PRIVATE
 
 target_include_directories(WukiInclude
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/include")
+
+# nn / rnn 的权重更新（runStudy）里会调 Wuki::Gpu 的大矩阵内核
+target_link_libraries(WukiInclude PUBLIC WukiGPU)
 
 # 库内编译时导出符号（dllexport），外部使用时自动切成导入（dllimport）
 target_compile_definitions(WukiInclude PRIVATE WUKI_INCLUDE_BUILD)
@@ -153,9 +204,23 @@ target_compile_options(wuki-ai PRIVATE
     $<$<CONFIG:Release>:-O3 -march=native -flto>
 )
 
-target_link_libraries(wuki-ai PRIVATE WukiInclude WukiLib WukiComm)
+target_link_libraries(wuki-ai PRIVATE WukiInclude WukiLib WukiComm WukiGPU)
 
 set_target_properties(wuki-ai PROPERTIES OUTPUT_NAME "wuki-ai")
+
+# ---------------------------------------------------------------------------
+# 5) wuki-gpu-bench：SIMD vs WebGPU 实测（只有真正编进 WebGPU 时才生成）
+# ---------------------------------------------------------------------------
+if(WUKI_WEBGPU_AVAILABLE)
+    add_executable(wuki-gpu-bench src/optimize/webgpu/bench.cpp)
+
+    target_compile_options(wuki-gpu-bench PRIVATE
+        $<$<CONFIG:Release>:-O3 -march=native -flto>
+    )
+
+    target_link_libraries(wuki-gpu-bench PRIVATE WukiGPU)
+    set_target_properties(wuki-gpu-bench PROPERTIES OUTPUT_NAME "wuki-gpu-bench")
+endif()
 
 # Windows：exe 无法链接 dll（只能链接导入库），这里提醒一下链接关系
 if(WIN32)
@@ -165,9 +230,27 @@ endif()
 # ---------------------------------------------------------------------------
 # 安装：cmake --install . 也会把这一套放进 <prefix>/Bin
 # ---------------------------------------------------------------------------
-install(TARGETS WukiInclude WukiLib WukiComm wuki-ai
+install(TARGETS WukiInclude WukiLib WukiComm WukiGPU wuki-ai
     RUNTIME DESTINATION Bin
     LIBRARY DESTINATION Bin
     ARCHIVE DESTINATION Bin)
+
+# 第三方许可证随安装走（许可证原文见 src/external/）
+install(FILES
+    src/external/cpp-httplib-LICENSE.txt
+    src/external/nlohmann-json-LICENSE.txt
+    src/external/webgpu-headers-LICENSE.txt
+    src/external/wgpu-native-LICENSE.APACHE.txt
+    src/external/wgpu-native-LICENSE.MIT.txt
+    DESTINATION Bin/licenses)
+
+# WebGPU 开启时，wgpu-native 的动态库也要跟着安装（exe 用 @loader_path / $ORIGIN 找它）
+if(WUKI_WEBGPU_AVAILABLE)
+    install(FILES "${WUKI_WEBGPU_RUNTIME_LIB}" DESTINATION Bin)
+    install(TARGETS wuki-gpu-bench
+        RUNTIME DESTINATION Bin
+        LIBRARY DESTINATION Bin
+        ARCHIVE DESTINATION Bin)
+endif()
 
 message(STATUS "构建产物输出目录: ${WUKI_BIN_DIR}")

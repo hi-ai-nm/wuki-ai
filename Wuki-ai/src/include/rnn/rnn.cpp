@@ -502,20 +502,26 @@ namespace rnn {
             // 50×wlr 试过（±0.05，是权重初始幅度的 1/6）：样本间互相打架，loss 来回振荡不收敛；
             // 5×wlr（±0.005）让 50 个样本的拉扯能沉淀到折中解上。
             // 注意：这是限速不是刹车，不保证收敛 —— 真正的收缩（权重衰减之类）是算法决策。
-            // clamp / NaN 守卫 / 落权合成一趟（逐元素的先后和原来分趟完全一致：先 clip，
-            // clip 完查 finite，过了才 += —— 任一格非有限都整轮拒收，权重不动）。
-            // std::clamp 拦得住 inf 拦不住 NaN（比较全假会原样返回），finite 检查就是防它的。
+            // clip 语义：每个修改量 clamp 到 ±5×wlr（只限步长、不约束方向）。
+            // std::clamp 拦得住 ±Inf（夹成 ±clip，仍是有限值）拦不住 NaN（比较全假，
+            // 原样返回）——所以 NaN 才是唯一要报 0x05 的情况。
+            //
+            // 改成两趟：先用向量扫一遍 dW / dB 有没有 NaN，再用向量做 clamp + 落权。
+            // 这样任意一格 NaN 时权重一个都不动（原来标量边查边加，NaN 之前的那半截
+            // 已经写进去了，和「整轮拒收」的说法对不上）。
             const float clipVal = 5.0f * wlr;
-            for (size_t i = 0; i < par.w.size(); i++) {
-                const float d = std::clamp(dW[i], -clipVal, clipVal);
-                if (!std::isfinite(d)) { par.errorCode = 0x05; par.errorBlgig = "train-dW-nonfinite"; return {}; }
-                par.w[i] += d;
+            if (study::has_nan(dW.data(), dW.size())) {
+                par.errorCode = 0x05;
+                par.errorBlgig = "train-dW-nonfinite";
+                return {};
             }
-            for (size_t i = 0; i < par.b.size(); i++) {
-                const float d = std::clamp(dB[i], -clipVal, clipVal);
-                if (!std::isfinite(d)) { par.errorCode = 0x05; par.errorBlgig = "train-dB-nonfinite"; return {}; }
-                par.b[i] += d;
+            if (study::has_nan(dB.data(), dB.size())) {
+                par.errorCode = 0x05;
+                par.errorBlgig = "train-dB-nonfinite";
+                return {};
             }
+            study::clip_add(par.w.data(), dW.data(), clipVal, par.w.size());
+            study::clip_add(par.b.data(), dB.data(), clipVal, par.b.size());
 
             // 老入口 inputTarget 就是第 0 步那一份（obtainInputTarget 用它）
             insPar.inputTarget = insPar.inputTargets[0];

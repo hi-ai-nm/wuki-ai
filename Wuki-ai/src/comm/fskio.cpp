@@ -72,7 +72,7 @@ namespace wuki {
             httplib::Server http;
             Handler handler;
             std::string route = "/post";
-            std::size_t port = 8689;
+            std::size_t port = 9000;
             bool init = false;
         };
 

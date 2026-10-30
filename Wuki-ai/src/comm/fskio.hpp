@@ -65,7 +65,7 @@ namespace wuki {
              * @return 0 成功；1 已经初始化过；2 reply 为空；3 路径为空；4 端口不在 1..65535
              */
             int Init(std::function<std::string(const std::string&)> reply,
-                     const std::string& route = "/post", std::size_t port = 8689);
+                     const std::string& route = "/post", std::size_t port = 9000);
 
             /// 阻塞监听，直到 Stop；返回 false 表示端口没抢到
             bool Start();

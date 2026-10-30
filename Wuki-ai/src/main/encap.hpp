@@ -412,25 +412,13 @@ namespace encap {
             return std::string{};
         }
 
-        /*
-         * 尾巴上的空白剪掉。
-         *
-         * 为什么会有：语料是 7 句 "hello world"，而 MakeStream 是按整句 Encode 建 token 流的，
-         * 句中/句尾那个空格也一并进了训练 —— 于是模型学到的就包括「空格 → 下一个词」。
-         * 生成时接完 "world" 之后它会顺着这条路一直吐空格，直到 genLen 用完，
-         * 结果就是「一个词 + 二十来个空格」（实测 24 个 token 里后 20 个是空格）。
-         * 这不是 bug，是这份玩具语料本身的性质。
-         *
-         * 但对「网页上显示一句话」来说首尾空白没有信息量，这里直接剪掉。
-         * 整条都是空白的情况（模型偶尔真的全程只吐空格）剪成空串，
-         * 调用方按「这次没生成出东西」处理，前端会显示「（Wuki 没说话）」。
-         *
-         * 想从根上少见到空格，要在语料 / 训练那边下手（让模型学会用 <END> 收尾，
-         * 或者给句尾一个明确的结束标记），不是这一层能解决的。
-         */
+
+        
         std::string reply = text.substr(head.size());
-        const std::string::size_type last = reply.find_last_not_of(" \t\r\n");
-        reply.erase(last == std::string::npos ? 0 : last + 1);  // 全是空白 → 剪成空串
+        /*
+            const std::string::size_type last = reply.find_last_not_of(" \t\r\n");
+            reply.erase(last == std::string::npos ? 0 : last + 1);  // 全是空白 → 剪成空串
+        */
         return reply;
     }
 

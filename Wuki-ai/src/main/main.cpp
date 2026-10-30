@@ -1,10 +1,14 @@
 #include "includeOne.hpp"  // llm.hpp（LLM 类）+ encap.hpp（流水线各阶段函数）
 #include "fskio.hpp"       // comm：FlaskIO（把「提示词 → 文本」挂到 HTTP 上，供 Flask 端调用）
+#include "optimize/webgpu.hpp"  // Wuki::Gpu：-V 打印加速后端状态 / 读 WUKI_GPU 环境变量
+#include "workdir.hpp"   // WorkDir：修改工作目录
 #include <cstring>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <iostream>
 
-constexpr std::string WUKI_VERSION = "V.F1B.DN";
+constexpr std::string WUKI_VERSION = "V.F3A";
 
 /*
  * wuki-ai 主程序：一条最小的「自造 LLM」流水线
@@ -31,6 +35,43 @@ int main(int argc, char *argv[]) {
     // cout 默认是块缓冲：被重定向 / 在容器里（docker logs）时，训练进度会一直攒着不吐出来，
     // 看着像卡死。unitbuf = 每次 << 都 flush —— 这套流水线只在每轮 / 每 N 轮打印一次，不心疼
     std::cout.setf(std::ios::unitbuf);
+
+    // 加速后端配置（WUKI_GPU=off|auto|force、WUKI_GPU_MIN=元素数）。
+    // 这里只读环境变量，不触发设备初始化 —— 真正初始化发生在第一次 ShouldUse 命中的时候，
+    // 没装显卡 / 容器里没设备也不会拖慢启动（auto 模式阈值以下的模型根本不会碰它）。
+    Wuki::Gpu::ConfigureFromEnv();
+
+    // 退出时打一行 GPU 使用小结：默认 auto 模式下一次都不会出现（阈值以下根本不碰 GPU），
+    // 用 WUKI_GPU=force 时能看到真实调用次数 —— 活动监视器按秒采样，抓不到这种
+    // 每次几百微秒的计算脉冲，这行数字更适合判断「到底用没用上」。
+    struct GpuSummary {
+        ~GpuSummary() {
+            const Wuki::Gpu::Stats stats = Wuki::Gpu::GetStats();
+            if (stats.ops != 0) {
+                std::cout << "GPU: 本次调用 " << stats.ops << " 次，搬运 "
+                          << (static_cast<double>(stats.bytes) / (1024.0 * 1024.0)) << " MB"
+                          << std::endl;
+            }
+            Wuki::Gpu::Shutdown();
+        }
+    } gpuSummary;
+
+    // 初始像素画
+
+    // 先固定 WorkDir
+    if (!chdirToExecutableDir()) {
+        std::cerr << "无法切换工作目录到可执行文件所在目录" << std::endl;
+    }
+
+    // 绘制图案
+    std::ifstream charImage("capa.conf");
+    if (charImage.is_open()) {
+        std::string line;
+        while (std::getline(charImage, line)) {
+            std::cout << line << std::endl;
+        }
+    } // 没有就不管了，不是必须
+    charImage.close();
 
     // ---------------- 参数 ----------------
     // 原来是一个 argc 一个分支地比字符串，加了 -C / -N 之后组合有十几种，改成扫一遍参数表
@@ -102,14 +143,26 @@ int main(int argc, char *argv[]) {
 
     if (mode == "version") {
         std::cout << "Wuki-ai " << WUKI_VERSION << std::endl;
+        // 加速后端状态：编没编进 WebGPU、有没有可用适配器、当前模式 / 阈值
+        std::cout << "GPU: " << Wuki::Gpu::Info() << std::endl;
+        if (Wuki::Gpu::GetMode() == Wuki::Gpu::Mode::Off || !Wuki::Gpu::Available()) {
+            // 没编进 WebGPU / 没有适配器时不说「阈值 0 个元素」这种莫名其妙的话
+            std::cout << "GPU 模式: "
+                      << (Wuki::Gpu::GetMode() == Wuki::Gpu::Mode::Off ? "off" : "auto")
+                      << "（本次不会使用 GPU）" << std::endl;
+        } else {
+            std::cout << "GPU 模式: "
+                      << (Wuki::Gpu::GetMode() == Wuki::Gpu::Mode::Force ? "force" : "auto")
+                      << "（阈值 " << Wuki::Gpu::MinElements() << " 个元素）" << std::endl;
+        }
         return 0;
     }
 
     if (mode == "help") {
         std::cout << // 版本信息
             "Wuki-ai " << WUKI_VERSION << R"(
-更新日期：2026-10-24
-* 此为 DevNode （开发节点）版，非正式版，切勿用于生产环境。
+更新日期：2026-10-30
+* 此项目在测试阶段，切勿用于生产环境。
 * 本项目为个人兴趣项目，不保证长期维护。)"
         << std::endl;
 
@@ -123,6 +176,12 @@ int main(int argc, char *argv[]) {
             "     给了就读文件，每行一句、句尾自带 </end>（和 src/main/llm/corpus.txt 同格式），\n"
             "     结束符换成 </end>、参数自动切到真语料那一套（更大的词表 / 更少的轮数）。\n"
             "  -N 只读前 n 行。真语料 110 万行，训练开销是 epochs × 样本数，先截 5000 行试最稳。\n"
+            "\n"
+            "GPU 加速（WebGPU / wgpu-native，可选）：\n"
+            "  WUKI_GPU=auto|off|force   默认 auto：只有单块矩阵够大才走 GPU，小了自动用 SIMD；\n"
+            "                            force 会忽略规模阈值（调试 / 对比用，小模型会更慢）。\n"
+            "  WUKI_GPU_MIN=<元素数>     auto 模式的规模阈值，默认 " << Wuki::Gpu::MinElements() << "。\n"
+            "  -V 会打印当前适配器和模式；阈值建议值见 wuki-gpu-bench 的实测输出。\n"
         << std::endl;
 
         return 0;
@@ -201,6 +260,14 @@ int main(int argc, char *argv[]) {
         } else if (const int code = templateInstance.Run(model)) {  // 玩具：默认提示词 hello
             return code;
         }
+
+        // 存储模型
+        const std::string modelPath = encap::ModelPath();
+        if (!model.Save(modelPath)) {
+            std::cout << "Save 失败: " << model.errCode << " (" << model.errBlgig << ")\n";
+            return 5;
+        }
+        std::cout << "权重已存: " << modelPath << "\n";
         return 0;
     }
 
@@ -241,6 +308,7 @@ int main(int argc, char *argv[]) {
                 std::cout << "Save 失败: " << model.errCode << " (" << model.errBlgig << ")\n";
                 return 5;
             }
+            std::cout << "权重已存: " << modelPath << "\n";
         }
 
         // 3) 候选 token：只跟 (语料, 词表) 有关，和提示词无关 —— 在这里算一次就够了。

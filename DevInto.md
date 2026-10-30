@@ -41,6 +41,20 @@
 - **实现位置** ：`Wuki-ai/src/include/optimize/simd.hpp`
 - **依赖文件** ：`Wuki-ai/src/include/optimize/simd/`，这个文件夹里都是 SIMD 的实现。  
 
+### 2.2 WebGPU（可选）
+
+- **公共接口** ：`Wuki-ai/src/include/optimize/webgpu.hpp`（`Wuki::Gpu`）
+- **实现位置** ：`Wuki-ai/src/optimize/webgpu/`（设备封装 `WebGpu.cpp`、WGSL 内核 `WebGpuShaders.hpp`、基准 `bench.cpp`）
+- **依赖** ：wgpu-native（Apache-2.0 / MIT 双许可，本项目按 Apache-2.0 用）+ webgpu.h（BSD-3-Clause）。
+  CMake 按固定版本 + SHA256 下载预编译包；许可证原文在 `Wuki-ai/src/external/`，署名见根 `README.md`。
+- **不要做的事** ：
+  - **不要让它默认比 SIMD 慢** ：一次 WebGPU 往返固定约 0.4 ms，数据量不够时 GPU 一定输。
+    所有内核必须配合 `Wuki::Gpu::ShouldUse(元素数)`，Auto 模式默认阈值 16M 元素；
+    不可用 / 太小 / 出错一律返回 `false` 让调用方回退 SIMD。
+  - **不要新加内核不量就接** ：先在 `wuki-gpu-bench` 里和真正的 SIMD 内核比（不是和标量循环比），
+    确认 crossover 后再决定接不接进 Auto。rank1 / axpy 这类「搬进搬出占大头」的已经量过，不接。
+  - **不要假设 GPU 结果逐位一致** ：并行归约的累加顺序不同，f32 会有 1e-5 量级差异。
+
 ## 3. 端口
 
 - **使用端口** ：8689

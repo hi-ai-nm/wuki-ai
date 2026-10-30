@@ -16,7 +16,7 @@
  *     wuki::comm::Server server;
  *     if (server.Init([](const std::string& req) {
  *             return wuki::comm::Reply{ 200, "收到 " + std::to_string(req.size()) + " 字节" };
- *         }, "/post", 8689) != 0) {
+ *         }, "/post", 9000) != 0) {
  *         return 8;                                 // 已经初始化过 / 回调为空
  *     }
  *     server.Start();                               // 阻塞，直到 Stop 或监听失败
@@ -73,7 +73,7 @@ namespace wuki {
              * @param port    端口，默认 8689（和 docker-compose 里映射出去的那个一致）
              * @return 0 成功；1 已经初始化过；2 回调为空；3 路径为空；4 端口不在 1..65535
              */
-            int Init(Handler handler, const std::string& route = "/post", std::size_t port = 8689);
+            int Init(Handler handler, const std::string& route = "/post", std::size_t port = 9000);
 
             /*
              * 阻塞监听 0.0.0.0:port，直到 Stop 或被外部打断；返回 false 表示端口没抢到
